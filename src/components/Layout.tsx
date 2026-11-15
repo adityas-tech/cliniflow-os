@@ -2,12 +2,14 @@ import React, { useEffect, useState } from "react";
 import {
   Activity,
   BarChart3,
+  BookOpen,
   Bot,
   Building2,
   Calendar,
   CheckCircle2,
   ClipboardList,
   CreditCard,
+  HelpCircle,
   LayoutDashboard,
   Megaphone,
   Menu,
@@ -26,13 +28,45 @@ import {
 import { useClinic } from "../context/ClinicContext";
 import { PageId, UserRole } from "../types/clinic";
 import { CommandPalette } from "./CommandPalette";
+import { OnboardingModal } from "./OnboardingModal";
 import { QuickBookModal } from "./QuickBookModal";
+import { TourBanner } from "./TourBanner";
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { state, activePage, setActivePage, setRole, setBranch, toasts, dismissToast } = useClinic();
+  const {
+    state,
+    activePage,
+    setActivePage,
+    setRole,
+    setBranch,
+    toasts,
+    dismissToast,
+    completedTutorials,
+    markTutorialDone,
+    tourActive,
+    startTour,
+    stopTour,
+  } = useClinic();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [quickBookOpen, setQuickBookOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [onboardingMode, setOnboardingMode] = useState<"welcome" | "page-help">("welcome");
+  const [onboardingOpen, setOnboardingOpen] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem("cliniflow_onboarding_seen_v1");
+    } catch {
+      return false;
+    }
+  });
+
+  const closeOnboarding = () => {
+    try {
+      localStorage.setItem("cliniflow_onboarding_seen_v1", "1");
+    } catch {
+      // ignore
+    }
+    setOnboardingOpen(false);
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -92,6 +126,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         { id: "ai-agents", label: "AI Agents Hub", icon: Bot },
         { id: "reports", label: "Reports, Forms & Audit", icon: BarChart3 },
         { id: "patient-portal", label: "Patient Portal View", icon: UserCheck },
+        {
+          id: "tutorials",
+          label: "Tutorials & Onboarding",
+          icon: BookOpen,
+          badge: completedTutorials.length < 12 ? 12 - completedTutorials.length : undefined,
+          badgeColor: "bg-indigo-100 text-indigo-700",
+        },
       ],
     },
   ];
@@ -249,6 +290,19 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               AI Agents
             </button>
 
+            {/* Contextual Page Guide */}
+            <button
+              onClick={() => {
+                setOnboardingMode(activePage === "tutorials" ? "welcome" : "page-help");
+                setOnboardingOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition"
+              title="How this page works & Guided Tour"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-teal-600" />
+              <span className="hidden md:inline">Guide</span>
+            </button>
+
             {/* Quick Book CTA */}
             <button
               onClick={() => setQuickBookOpen(true)}
@@ -288,6 +342,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} onOpenQuickBook={() => setQuickBookOpen(true)} />
       <QuickBookModal open={quickBookOpen} onClose={() => setQuickBookOpen(false)} />
+      <OnboardingModal open={onboardingOpen} mode={onboardingMode} onClose={closeOnboarding} onStartTour={(p) => startTour(p)} />
+      <TourBanner active={tourActive} onClose={stopTour} completedIds={completedTutorials} onMarkCompleted={markTutorialDone} />
     </div>
   );
 };

@@ -39,7 +39,8 @@ export type PageId =
   | "voice-whatsapp"
   | "ai-agents"
   | "reports"
-  | "patient-portal";
+  | "patient-portal"
+  | "tutorials";
 
 export interface Branch {
   id: string;

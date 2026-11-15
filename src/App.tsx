@@ -12,6 +12,7 @@ import { PatientsEmrPage } from "./pages/PatientsEmrPage";
 import { PharmacyPosPage } from "./pages/PharmacyPosPage";
 import { QueueAttendancePage } from "./pages/QueueAttendancePage";
 import { ReportsIntegrationsPage } from "./pages/ReportsIntegrationsPage";
+import { TutorialsPage } from "./pages/TutorialsPage";
 import { VoiceWhatsAppPage } from "./pages/VoiceWhatsAppPage";
 
 const PageRouter: React.FC = () => {
@@ -42,6 +43,8 @@ const PageRouter: React.FC = () => {
       return <ReportsIntegrationsPage />;
     case "patient-portal":
       return <PatientPortalPage />;
+    case "tutorials":
+      return <TutorialsPage />;
     default:
       return <DashboardPage />;
   }

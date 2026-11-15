@@ -46,6 +46,13 @@ interface ClinicContextValue {
   toasts: ToastItem[];
   notify: (title: string, description?: string, type?: ToastItem["type"]) => void;
   dismissToast: (id: string) => void;
+  completedTutorials: PageId[];
+  toggleTutorialDone: (id: PageId) => void;
+  markTutorialDone: (id: PageId) => void;
+  resetTutorials: () => void;
+  tourActive: boolean;
+  startTour: (startPage?: PageId) => void;
+  stopTour: () => void;
 
   setRole: (role: UserRole) => void;
   setBranch: (branchId: string) => void;
@@ -133,6 +140,44 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [activePage, setActivePage] = useState<PageId>("dashboard");
   const [selectedPatientId, setSelectedPatientId] = useState<string>(SEED_STATE.patients[0].id);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [tourActive, setTourActive] = useState(false);
+  const [completedTutorials, setCompletedTutorials] = useState<PageId[]>(() => {
+    try {
+      const raw = localStorage.getItem("cliniflow_tutorials_done_v1");
+      return raw ? (JSON.parse(raw) as PageId[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("cliniflow_tutorials_done_v1", JSON.stringify(completedTutorials));
+    } catch {
+      // ignore
+    }
+  }, [completedTutorials]);
+
+  const toggleTutorialDone = (id: PageId) => {
+    setCompletedTutorials((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const markTutorialDone = (id: PageId) => {
+    setCompletedTutorials((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const resetTutorials = () => {
+    setCompletedTutorials([]);
+    notify("Onboarding progress reset", undefined, "info");
+  };
+
+  const startTour = (startPage?: PageId) => {
+    if (startPage) setActivePage(startPage);
+    setTourActive(true);
+    notify("Guided Interactive Tour started", "Follow the bottom bar across each live module", "info");
+  };
+
+  const stopTour = () => setTourActive(false);
 
   useEffect(() => {
     try {
@@ -931,6 +976,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toasts,
         notify,
         dismissToast,
+        completedTutorials,
+        toggleTutorialDone,
+        markTutorialDone,
+        resetTutorials,
+        tourActive,
+        startTour,
+        stopTour,
         setRole,
         setBranch,
         setPortalPatient,
