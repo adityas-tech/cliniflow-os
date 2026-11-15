@@ -12,6 +12,7 @@ import { PatientsEmrPage } from "./pages/PatientsEmrPage";
 import { PharmacyPosPage } from "./pages/PharmacyPosPage";
 import { QueueAttendancePage } from "./pages/QueueAttendancePage";
 import { ReportsIntegrationsPage } from "./pages/ReportsIntegrationsPage";
+import { VoiceWhatsAppPage } from "./pages/VoiceWhatsAppPage";
 
 const PageRouter: React.FC = () => {
   const { activePage } = useClinic();
@@ -33,6 +34,8 @@ const PageRouter: React.FC = () => {
       return <BillingFinancePage />;
     case "growth":
       return <GrowthCrmPage />;
+    case "voice-whatsapp":
+      return <VoiceWhatsAppPage />;
     case "ai-agents":
       return <AiAgentsPage />;
     case "reports":

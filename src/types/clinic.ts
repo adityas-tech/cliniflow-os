@@ -13,6 +13,9 @@ export type AppointmentStatus =
   | "no-show";
 
 export type ClinicSpecialty =
+  | "Pulmonology & Sleep"
+  | "ENT & Head-Neck"
+  | "Chest & Allergy"
   | "General Medicine"
   | "Dermatology"
   | "Physiotherapy"
@@ -33,6 +36,7 @@ export type PageId =
   | "inventory"
   | "billing"
   | "growth"
+  | "voice-whatsapp"
   | "ai-agents"
   | "reports"
   | "patient-portal";
@@ -237,7 +241,7 @@ export interface Appointment {
   checkedInAt?: string;
   reminderSent: boolean;
   isBlockedSlot?: boolean;
-  source: "Front Desk" | "Online Microsite" | "WhatsApp AI" | "Follow-up";
+  source: "Front Desk" | "Online Microsite" | "WhatsApp AI" | "Voice AI Call" | "Follow-up";
 }
 
 export interface InventoryItem {
@@ -372,7 +376,45 @@ export interface PatientReview {
   rating: number;
   comment: string;
   createdAt: string;
-  status: "pending" | "approved" | "hidden";
+  channel: "Google Business" | "WhatsApp" | "Voice AI" | "Patient Portal";
+  status: "pending" | "approved" | "hidden" | "action-required" | "resolved";
+  actionNote?: string;
+  assignedTo?: string;
+  syncedToGoogle?: boolean;
+}
+
+export interface GoogleBusinessKnowledge {
+  clinicName: string;
+  googleShareUrl: string;
+  phone: string;
+  address: string;
+  secondaryLocation: string;
+  timings: string;
+  googleRating: number;
+  googleReviewCount: number;
+  doctorsSummary: Array<{
+    name: string;
+    role: string;
+    expertise: string;
+    fee: number;
+  }>;
+  servicesFaq: Array<{
+    id: string;
+    question: string;
+    answer: string;
+  }>;
+}
+
+export interface VoiceCallLog {
+  id: string;
+  callerPhone: string;
+  callerName: string;
+  timestamp: string;
+  durationSec: number;
+  intent: "Book Appointment" | "Reschedule" | "Cancel" | "Report Update" | "Clinic Query" | "Feedback";
+  outcome: string;
+  ratingCollected?: number;
+  transcript: Array<{ speaker: "AI Agent" | "Caller"; text: string }>;
 }
 
 export interface BroadcastCampaign {
@@ -441,4 +483,6 @@ export interface ClinicState {
   forms: CustomFormTemplate[];
   integrations: IntegrationConfig[];
   auditLogs: AuditLogEntry[];
+  googleBusiness: GoogleBusinessKnowledge;
+  voiceCallLogs: VoiceCallLog[];
 }

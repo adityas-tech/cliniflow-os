@@ -273,10 +273,10 @@ export const GrowthCrmPage: React.FC = () => {
           <div className="bg-gradient-to-r from-teal-700 to-cyan-700 text-white p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 text-[11px] font-semibold mb-2">
-                <Globe className="w-3.5 h-3.5" /> Public Clinic Microsite: cliniflow.care/koramangala
+                <Globe className="w-3.5 h-3.5" /> Public Clinic Microsite: cliniflow.care/dr-kackers
               </div>
-              <h2 className="text-xl font-bold">CliniFlow Integrated Medical & Wellness Center</h2>
-              <p className="text-xs text-teal-100 mt-1">Book In-Person, Video Telehealth, or Home Visits — zero app download required.</p>
+              <h2 className="text-xl font-bold">Dr. Kacker’s Chest, Sleep & ENT Clinic</h2>
+              <p className="text-xs text-teal-100 mt-1">Kanpur (Mall Road) & Lucknow • Book In-Person, Video Telehealth, or Home Visits.</p>
             </div>
             <div className="text-right text-xs">
               <div className="font-bold">★ 4.9 / 5.0 Verified Patient Rating</div>

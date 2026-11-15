@@ -11,6 +11,7 @@ import {
   CustomFormTemplate,
   DietPlan,
   ExpenseRecord,
+  GoogleBusinessKnowledge,
   InventoryItem,
   Invoice,
   InvoiceLineItem,
@@ -18,14 +19,16 @@ import {
   Lead,
   PageId,
   Patient,
+  PatientReview,
   Prescription,
   PurchaseOrder,
   UserRole,
   VitalRecord,
+  VoiceCallLog,
   WorkoutPlan,
 } from "../types/clinic";
 
-const STORAGE_KEY = "cliniflow_os_state_v1";
+const STORAGE_KEY = "cliniflow_os_state_v2";
 
 export interface ToastItem {
   id: string;
@@ -50,6 +53,7 @@ interface ClinicContextValue {
 
   startConsultation: (patientId: string, appointmentId?: string) => void;
   addAppointment: (apt: Omit<Appointment, "id" | "tokenNumber">) => Appointment;
+  rescheduleAppointment: (id: string, date: string, startTime: string, mode?: AppointmentMode) => void;
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
   sendAppointmentReminder: (id: string) => void;
 
@@ -90,7 +94,19 @@ interface ClinicContextValue {
   updateLeadStage: (leadId: string, stage: Lead["stage"]) => void;
   convertLeadToPatient: (leadId: string, bookDoctorId?: string, mode?: AppointmentMode) => Patient | null;
   sendCampaign: (campaign: Omit<BroadcastCampaign, "id" | "sentAt" | "openRate">) => void;
-  moderateReview: (reviewId: string, status: "approved" | "hidden") => void;
+  moderateReview: (reviewId: string, status: PatientReview["status"]) => void;
+  submitFeedback: (params: {
+    patientName: string;
+    doctorName: string;
+    rating: number;
+    comment: string;
+    channel: PatientReview["channel"];
+    syncedToGoogle?: boolean;
+  }) => void;
+  updateReviewFollowUp: (reviewId: string, updates: Partial<Pick<PatientReview, "status" | "actionNote" | "assignedTo" | "syncedToGoogle">>) => void;
+  addGoogleFaq: (question: string, answer: string) => void;
+  updateGoogleBusiness: (patch: Partial<GoogleBusinessKnowledge>) => void;
+  addVoiceCallLog: (log: Omit<VoiceCallLog, "id" | "timestamp">) => void;
   registerEventAttendee: (eventId: string) => void;
 
   toggleIntegration: (integrationId: string) => void;
@@ -107,7 +123,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [state, setState] = useState<ClinicState>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved) as ClinicState;
+      if (saved) return { ...SEED_STATE, ...(JSON.parse(saved) as Partial<ClinicState>) };
     } catch {
       // ignore parse errors
     }
@@ -232,6 +248,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     });
     notify(`Appointment updated to ${status.replace("-", " ")}`, undefined, "info");
+  };
+
+  const rescheduleAppointment = (id: string, date: string, startTime: string, mode?: AppointmentMode) => {
+    setState((prev) => ({
+      ...prev,
+      appointments: prev.appointments.map((a) =>
+        a.id === id ? { ...a, date, startTime, mode: mode ?? a.mode, status: "confirmed" } : a
+      ),
+      auditLogs: appendAudit(prev, "Voice / Calendar", "Rescheduled Appointment", `Updated appointment ${id} to ${date} ${startTime}`),
+    }));
+    notify(`Appointment rescheduled to ${date} at ${startTime}`);
   };
 
   const sendAppointmentReminder = (id: string) => {
@@ -745,12 +772,98 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     notify(`${campaign.channel} broadcast queued to ${campaign.sentCount} recipients`);
   };
 
-  const moderateReview = (reviewId: string, status: "approved" | "hidden") => {
+  const moderateReview = (reviewId: string, status: PatientReview["status"]) => {
     setState((prev) => ({
       ...prev,
       reviews: prev.reviews.map((r) => (r.id === reviewId ? { ...r, status } : r)),
     }));
-    notify(`Review ${status}`, undefined, "info");
+    notify(`Review marked ${status}`, undefined, "info");
+  };
+
+  const submitFeedback: ClinicContextValue["submitFeedback"] = ({
+    patientName,
+    doctorName,
+    rating,
+    comment,
+    channel,
+    syncedToGoogle = false,
+  }) => {
+    const status: PatientReview["status"] = rating <= 3 ? "action-required" : "approved";
+    const rec: PatientReview = {
+      id: uid("rev"),
+      patientName,
+      doctorName,
+      rating,
+      comment,
+      createdAt: "Just now",
+      channel,
+      status,
+      syncedToGoogle,
+      actionNote: rating <= 3 ? "Low rating captured — front desk follow-up required." : undefined,
+      assignedTo: rating <= 3 ? "Priya Menon" : undefined,
+    };
+    setState((prev) => ({
+      ...prev,
+      reviews: [rec, ...prev.reviews],
+      googleBusiness: syncedToGoogle
+        ? {
+            ...prev.googleBusiness,
+            googleReviewCount: prev.googleBusiness.googleReviewCount + 1,
+          }
+        : prev.googleBusiness,
+      auditLogs: appendAudit(
+        prev,
+        "Feedback & Reviews",
+        `Collected ${rating}★ via ${channel}`,
+        `${patientName}: "${comment.slice(0, 80)}"`
+      ),
+    }));
+    notify(
+      rating <= 3 ? `Feedback saved (${rating}★) & flagged for follow-up` : `Thank you! ${rating}★ review saved from ${channel}`,
+      syncedToGoogle ? "Synced to Google Business Review Queue" : undefined,
+      rating <= 3 ? "warning" : "success"
+    );
+  };
+
+  const updateReviewFollowUp: ClinicContextValue["updateReviewFollowUp"] = (reviewId, updates) => {
+    setState((prev) => ({
+      ...prev,
+      reviews: prev.reviews.map((r) => (r.id === reviewId ? { ...r, ...updates } : r)),
+      auditLogs: appendAudit(prev, "Reviews Workbench", "Updated Feedback Ticket", `Review ${reviewId} updated`),
+    }));
+    notify("Feedback follow-up updated");
+  };
+
+  const addGoogleFaq = (question: string, answer: string) => {
+    setState((prev) => ({
+      ...prev,
+      googleBusiness: {
+        ...prev.googleBusiness,
+        servicesFaq: [{ id: uid("faq"), question, answer }, ...prev.googleBusiness.servicesFaq],
+      },
+    }));
+    notify("Voice & WhatsApp AI trained with new clinic FAQ");
+  };
+
+  const updateGoogleBusiness = (patch: Partial<GoogleBusinessKnowledge>) => {
+    setState((prev) => ({
+      ...prev,
+      googleBusiness: { ...prev.googleBusiness, ...patch },
+    }));
+    notify("Google Business Knowledge Base updated");
+  };
+
+  const addVoiceCallLog = (log: Omit<VoiceCallLog, "id" | "timestamp">) => {
+    const rec: VoiceCallLog = {
+      ...log,
+      id: uid("call"),
+      timestamp: `Today, ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    };
+    setState((prev) => ({
+      ...prev,
+      voiceCallLogs: [rec, ...prev.voiceCallLogs],
+      auditLogs: appendAudit(prev, "Voice AI", log.intent, `${log.callerName} (${log.callerPhone}): ${log.outcome}`),
+    }));
   };
 
   const registerEventAttendee = (eventId: string) => {
@@ -849,7 +962,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         convertLeadToPatient,
         sendCampaign,
         moderateReview,
+        submitFeedback,
+        updateReviewFollowUp,
+        addGoogleFaq,
+        updateGoogleBusiness,
+        addVoiceCallLog,
         registerEventAttendee,
+        rescheduleAppointment,
         toggleIntegration,
         addFormTemplate,
         toggleStaffStatus,

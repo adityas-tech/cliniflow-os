@@ -1,9 +1,12 @@
-import React from "react";
-import { Award, Calendar, CreditCard, Dumbbell, FileText, Pill, ShieldCheck, Utensils } from "lucide-react";
+import React, { useState } from "react";
+import { Award, Calendar, CreditCard, Dumbbell, ExternalLink, FileText, Pill, ShieldCheck, Star, Utensils } from "lucide-react";
 import { useClinic } from "../context/ClinicContext";
 
 export const PatientPortalPage: React.FC = () => {
-  const { state, setPortalPatient, collectInvoicePayment, notify } = useClinic();
+  const { state, setPortalPatient, collectInvoicePayment, submitFeedback, notify } = useClinic();
+  const [portalRating, setPortalRating] = useState(5);
+  const [portalComment, setPortalComment] = useState("");
+  const [portalGoogle, setPortalGoogle] = useState(true);
   const patient = state.patients.find((p) => p.id === state.activePortalPatientId) || state.patients[0];
 
   const myApts = state.appointments.filter((a) => !a.isBlockedSlot && a.patientId === patient.id);
@@ -152,6 +155,64 @@ export const PatientPortalPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Portal Feedback & Google Business Review Card */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!portalComment.trim()) return;
+          submitFeedback({
+            patientName: patient.name,
+            doctorName: state.staff.find((s) => s.role === "doctor")?.name || "Dr. Rajeev Kacker",
+            rating: portalRating,
+            comment: portalComment.trim(),
+            channel: "Patient Portal",
+            syncedToGoogle: portalGoogle && portalRating >= 4,
+          });
+          setPortalComment("");
+        }}
+        className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+              <Star className="w-4 h-4 text-amber-500" /> Share Your Visit Rating & Feedback
+            </h2>
+            <p className="text-xs text-slate-500">Helps our doctors & staff serve you better, with optional Google Business posting.</p>
+          </div>
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setPortalRating(r)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold ${portalRating >= r ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-500"}`}
+              >
+                {r}★
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          <input
+            required
+            value={portalComment}
+            onChange={(e) => setPortalComment(e.target.value)}
+            placeholder="Write your feedback about consultation, staff, or diagnostics..."
+            className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <input type="checkbox" checked={portalGoogle} onChange={(e) => setPortalGoogle(e.target.checked)} className="rounded text-teal-600" />
+            Also post to Google Business
+          </label>
+          <button type="submit" className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold">
+            Submit Review
+          </button>
+        </div>
+        <a href={state.googleBusiness.googleShareUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:underline">
+          Direct Google Business Review Link <ExternalLink className="w-3 h-3" />
+        </a>
+      </form>
     </div>
   );
 };

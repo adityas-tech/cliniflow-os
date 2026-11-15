@@ -12,6 +12,7 @@ import {
   Megaphone,
   Menu,
   Package,
+  PhoneCall,
   Pill,
   Plus,
   Search,
@@ -76,6 +77,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       items: [
         { id: "billing", label: "Billing & Memberships", icon: CreditCard, badge: pendingInvoicesCount || undefined, badgeColor: "bg-sky-100 text-sky-700" },
         { id: "growth", label: "CRM, Leads & Microsite", icon: Megaphone },
+        {
+          id: "voice-whatsapp",
+          label: "Voice AI & WhatsApp",
+          icon: PhoneCall,
+          badge: state.reviews.filter((r) => r.status === "action-required").length || undefined,
+          badgeColor: "bg-rose-100 text-rose-700",
+        },
       ],
     },
     {

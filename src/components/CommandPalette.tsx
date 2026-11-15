@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Calendar, FileText, Package, Pill, Search, Sparkles, User, X } from "lucide-react";
+import { Calendar, FileText, Package, PhoneCall, Pill, Search, Sparkles, User, X } from "lucide-react";
 import { useClinic } from "../context/ClinicContext";
 
 interface CommandPaletteProps {
@@ -33,6 +33,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose, o
 
   const quickActions = [
     { label: "Book New Appointment", icon: Calendar, action: () => { onClose(); onOpenQuickBook(); } },
+    { label: "Open Voice AI Helpline & WhatsApp Flow", icon: PhoneCall, action: () => { setActivePage("voice-whatsapp"); onClose(); } },
     { label: "Open Pharmacy & Quick Sale (POS)", icon: Pill, action: () => { setActivePage("pharmacy"); onClose(); } },
     { label: "Launch AI Agents Hub (MedQuery / VoiceCmd / MedDoc)", icon: Sparkles, action: () => { setActivePage("ai-agents"); onClose(); } },
     { label: "Switch to Patient Self-Service Portal", icon: User, action: () => { setActivePage("patient-portal"); onClose(); } },
