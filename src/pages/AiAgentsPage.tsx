@@ -238,6 +238,7 @@ export const AiAgentsPage: React.FC = () => {
                       doctorId: state.staff.find((s) => s.role === "doctor")?.id || "doc-1",
                       templateType: "SOAP",
                       chiefComplaint: parsedSoap.cc,
+                      symptoms: [parsedSoap.cc],
                       subjective: parsedSoap.s,
                       objective: parsedSoap.o,
                       assessment: parsedSoap.a,

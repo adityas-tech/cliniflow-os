@@ -9,7 +9,6 @@ import {
   FlaskConical,
   HeartPulse,
   MessageSquare,
-  Mic,
   Pill,
   Plus,
   Printer,
@@ -22,9 +21,10 @@ import {
   Watch,
   X,
 } from "lucide-react";
+import { DoctorConsultCopilot } from "../components/DoctorConsultCopilot";
 import { useClinic } from "../context/ClinicContext";
 import { TODAY_STR } from "../data/seedData";
-import { ClinicSpecialty, ClinicalNote, PrescriptionItem } from "../types/clinic";
+import { ClinicSpecialty, PrescriptionItem } from "../types/clinic";
 
 type EmrTab = "overview" | "notes" | "rx" | "labs" | "careplan" | "comms";
 
@@ -36,7 +36,6 @@ export const PatientsEmrPage: React.FC = () => {
     addPatient,
     addVitalRecord,
     syncWearable,
-    addClinicalNote,
     addPrescription,
     addLabOrder,
     updateLabOrderStatus,
@@ -46,7 +45,7 @@ export const PatientsEmrPage: React.FC = () => {
   } = useClinic();
 
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<EmrTab>("overview");
+  const [tab, setTab] = useState<EmrTab>("notes");
   const [newPatientOpen, setNewPatientOpen] = useState(false);
 
   // New Patient Form
@@ -65,20 +64,6 @@ export const PatientsEmrPage: React.FC = () => {
   const [spo2, setSpo2] = useState(99);
   const [weight, setWeight] = useState(70);
   const [glucose, setGlucose] = useState(110);
-
-  // Clinical Note + VoiceCmd
-  const [noteType, setNoteType] = useState<ClinicalNote["templateType"]>("SOAP");
-  const [chief, setChief] = useState("");
-  const [subj, setSubj] = useState("");
-  const [obj, setObj] = useState("");
-  const [assess, setAssess] = useState("");
-  const [plan, setPlan] = useState("");
-  const [icd, setIcd] = useState("E11.9");
-  const [prakriti, setPrakriti] = useState("Vata-Pitta");
-  const [vikriti, setVikriti] = useState("Pitta Aggravated");
-  const [agni, setAgni] = useState("Tikshnagni");
-  const [nadi, setNadi] = useState("Manduka Gati");
-  const [isListening, setIsListening] = useState(false);
 
   // e-Prescription Builder
   const [rxDiagnosis, setRxDiagnosis] = useState("");
@@ -105,7 +90,6 @@ export const PatientsEmrPage: React.FC = () => {
 
   const patient = state.patients.find((p) => p.id === selectedPatientId) || state.patients[0];
   const latestVitals = patient?.vitals[patient.vitals.length - 1];
-  const patientNotes = state.clinicalNotes.filter((n) => n.patientId === patient?.id);
   const patientRxs = state.prescriptions.filter((r) => r.patientId === patient?.id);
   const patientLabs = state.labOrders.filter((l) => l.patientId === patient?.id);
   const patientDiets = state.dietPlans.filter((d) => d.patientId === patient?.id);
@@ -151,49 +135,6 @@ export const PatientsEmrPage: React.FC = () => {
       bloodGlucoseMgDl: glucose,
       source: "clinic",
     });
-  };
-
-  const runVoiceCmdSimulate = () => {
-    setIsListening(true);
-    setTimeout(() => {
-      setIsListening(false);
-      if (noteType === "Ayurveda Prakriti") {
-        setChief("Chronic fatigue, disturbed sleep, post-meal bloating");
-        setSubj("Patient reports waking around 3 AM, acid reflux after spicy foods.");
-        setObj("Nadi reveals Vata-Pitta predominance; tongue shows mild Ama coating.");
-        setAssess("Vata-Pitta Prakopa with Mandagni");
-        setPlan("Start Ashwagandha Churna 1 tsp bedtime, Panchakarma Shirodhara x5, warm cooked meals.");
-      } else {
-        setChief("Follow-up metabolic review & mild morning dizziness");
-        setSubj("Adherent to medication. Morning fasting sugars averaging 126 mg/dL. Reports 7,500 daily steps via Apple Health.");
-        setObj(`BP ${latestVitals?.bpSystolic || 126}/${latestVitals?.bpDiastolic || 82} mmHg, HR ${latestVitals?.heartRate || 72} bpm, SpO2 ${latestVitals?.spo2 || 99}%. Cardiovascular & chest exam clear.`);
-        setAssess(`${patient?.chronicConditions.join(", ") || "Stable Metabolic Profile"} — improving glycemic trend.`);
-        setPlan("Continue current antihyperglycemic regimen, add Vitamin D3 60K weekly, reinforce low-GI NutriPlan diet. Follow up in 4 weeks.");
-      }
-      notify("VoiceCmd AI Scribe transcribed consultation into structured note", undefined, "info");
-    }, 900);
-  };
-
-  const handleSaveNote = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!patient || !chief.trim()) return;
-    addClinicalNote({
-      patientId: patient.id,
-      doctorId: doctors[0]?.id || "doc-1",
-      templateType: noteType,
-      chiefComplaint: chief,
-      subjective: subj,
-      objective: obj,
-      assessment: assess,
-      plan,
-      icdCode: icd,
-      ayurvedaDosha: noteType === "Ayurveda Prakriti" ? { prakriti, vikriti, agni, nadi } : undefined,
-    });
-    setChief("");
-    setSubj("");
-    setObj("");
-    setAssess("");
-    setPlan("");
   };
 
   const handleAddRxItem = () => {
@@ -396,8 +337,8 @@ export const PatientsEmrPage: React.FC = () => {
             {/* Healthboard Sub-Navigation */}
             <div className="mt-5 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
               {([
+                { id: "notes", label: "Doctor Consultation & AI Copilot", icon: FileText },
                 { id: "overview", label: "Healthboard & Vitals", icon: HeartPulse },
-                { id: "notes", label: "Clinical Notes & VoiceCmd AI", icon: FileText },
                 { id: "rx", label: "Digital e-Prescription", icon: Pill },
                 { id: "labs", label: "Lab Orders & MedDoc AI", icon: FlaskConical },
                 { id: "careplan", label: "Diet & Workout (NutriPlan AI)", icon: Utensils },
@@ -548,120 +489,8 @@ export const PatientsEmrPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 2: Clinical Notes + VoiceCmd AI */}
-          {tab === "notes" && (
-            <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-              <form onSubmit={handleSaveNote} className="xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-5 space-y-3.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-bold text-slate-900">New Consultation Note</h3>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={noteType}
-                      onChange={(e) => setNoteType(e.target.value as ClinicalNote["templateType"])}
-                      className="text-xs font-semibold border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50"
-                    >
-                      <option value="SOAP">Standard SOAP Note</option>
-                      <option value="Ayurveda Prakriti">Ayurveda Prakriti & Dosha EMR</option>
-                      <option value="Physiotherapy ROM">Physiotherapy ROM & Rehab</option>
-                      <option value="Dermatology">Dermatology Lesion & Regimen</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={runVoiceCmdSimulate}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                        isListening
-                          ? "bg-rose-600 text-white animate-pulse"
-                          : "bg-violet-600 hover:bg-violet-700 text-white"
-                      }`}
-                    >
-                      <Mic className="w-3.5 h-3.5" />
-                      {isListening ? "Transcribing..." : "VoiceCmd AI Dictate"}
-                    </button>
-                  </div>
-                </div>
-
-                {noteType === "Ayurveda Prakriti" && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
-                    <div>
-                      <label className="text-[10px] font-bold text-emerald-800 uppercase">Prakriti</label>
-                      <input value={prakriti} onChange={(e) => setPrakriti(e.target.value)} className="w-full mt-1 px-2 py-1 text-xs bg-white border border-emerald-200 rounded-lg" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-emerald-800 uppercase">Vikriti</label>
-                      <input value={vikriti} onChange={(e) => setVikriti(e.target.value)} className="w-full mt-1 px-2 py-1 text-xs bg-white border border-emerald-200 rounded-lg" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-emerald-800 uppercase">Agni</label>
-                      <input value={agni} onChange={(e) => setAgni(e.target.value)} className="w-full mt-1 px-2 py-1 text-xs bg-white border border-emerald-200 rounded-lg" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-emerald-800 uppercase">Nadi Pariksha</label>
-                      <input value={nadi} onChange={(e) => setNadi(e.target.value)} className="w-full mt-1 px-2 py-1 text-xs bg-white border border-emerald-200 rounded-lg" />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-semibold text-slate-600">Chief Complaint</label>
-                    <input required value={chief} onChange={(e) => setChief(e.target.value)} placeholder="Primary symptoms & duration..." className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-xl" />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600">ICD-10 Code</label>
-                    <input value={icd} onChange={(e) => setIcd(e.target.value)} className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-xl" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600">Subjective (History)</label>
-                    <textarea rows={3} value={subj} onChange={(e) => setSubj(e.target.value)} className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-xl" />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600">Objective (Exam / Findings)</label>
-                    <textarea rows={3} value={obj} onChange={(e) => setObj(e.target.value)} className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-xl" />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600">Assessment / Diagnosis</label>
-                    <textarea rows={2} value={assess} onChange={(e) => setAssess(e.target.value)} className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-xl" />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600">Treatment Plan & Follow-Up</label>
-                    <textarea rows={2} value={plan} onChange={(e) => setPlan(e.target.value)} className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-xl" />
-                  </div>
-                </div>
-
-                <button type="submit" className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold">
-                  Sign & Save Clinical Note
-                </button>
-              </form>
-
-              <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-4 space-y-3">
-                <h3 className="text-sm font-bold text-slate-900">Past Consultation Notes ({patientNotes.length})</h3>
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                  {patientNotes.map((n) => (
-                    <div key={n.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-bold">{n.templateType}</span>
-                        <span className="text-[11px] text-slate-400">{n.createdAt}</span>
-                      </div>
-                      <div className="font-bold text-slate-900">{n.chiefComplaint}</div>
-                      {n.ayurvedaDosha && (
-                        <div className="text-[11px] text-emerald-800 bg-emerald-50 px-2 py-1 rounded">
-                          Prakriti: {n.ayurvedaDosha.prakriti} • Vikriti: {n.ayurvedaDosha.vikriti} • Agni: {n.ayurvedaDosha.agni}
-                        </div>
-                      )}
-                      <p className="text-slate-600"><strong>S:</strong> {n.subjective}</p>
-                      <p className="text-slate-600"><strong>O:</strong> {n.objective}</p>
-                      <p className="text-slate-700"><strong>A:</strong> {n.assessment} {n.icdCode ? `(${n.icdCode})` : ""}</p>
-                      <p className="text-slate-700"><strong>P:</strong> {n.plan}</p>
-                    </div>
-                  ))}
-                  {patientNotes.length === 0 && <div className="text-xs text-slate-400 py-8 text-center">No notes recorded yet.</div>}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* TAB 2: Doctor Consultation, Real-Time Meeting & Clinical AI Copilot */}
+          {tab === "notes" && <DoctorConsultCopilot patient={patient} />}
 
           {/* TAB 3: Digital e-Prescription */}
           {tab === "rx" && (

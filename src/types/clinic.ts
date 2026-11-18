@@ -88,19 +88,61 @@ export interface WearableSnapshot {
   lastBp?: string;
 }
 
+export type ConsultationDisposition =
+  | "Outpatient Follow-Up"
+  | "Hospitalization Required"
+  | "Specialist Referral";
+
+export interface DifferentialDiagnosis {
+  condition: string;
+  icdCode: string;
+  likelihood: "High" | "Moderate" | "Rule Out";
+  rationale: string;
+}
+
 export interface ClinicalNote {
   id: string;
   patientId: string;
   doctorId: string;
   appointmentId?: string;
   createdAt: string;
-  templateType: "SOAP" | "Ayurveda Prakriti" | "Physiotherapy ROM" | "Dermatology";
+  templateType: "SOAP" | "Ayurveda Prakriti" | "Physiotherapy ROM" | "Dermatology" | "Pulmonology & Sleep";
   chiefComplaint: string;
+  symptoms: string[];
+  onExamination?: {
+    general?: string;
+    respiratory?: string;
+    cardiovascular?: string;
+    ent?: string;
+    systemic?: string;
+  };
   subjective: string;
   objective: string;
   assessment: string;
   plan: string;
   icdCode?: string;
+  investigationsRequired?: string[];
+  medicinesSummary?: string[];
+  disposition?: ConsultationDisposition;
+  hospitalizationDetails?: {
+    urgency: "Immediate / ER" | "Elective Admission";
+    wardType: "ICU / Respiratory HDU" | "General Ward" | "Sleep Lab Overnight";
+    admissionReason: string;
+    estimatedStayDays?: number;
+  };
+  referralDetails?: {
+    referredTo: string;
+    facility: string;
+    reason: string;
+    urgency: "Urgent" | "Routine";
+  };
+  differentialDiagnoses?: DifferentialDiagnosis[];
+  liveTranscript?: Array<{
+    timestamp: string;
+    speaker: "Doctor" | "Patient";
+    text: string;
+    extractedTag?: string;
+  }>;
   ayurvedaDosha?: {
     prakriti: string;
     vikriti: string;

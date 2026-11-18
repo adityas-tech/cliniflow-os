@@ -28,7 +28,7 @@ import {
   WorkoutPlan,
 } from "../types/clinic";
 
-const STORAGE_KEY = "cliniflow_os_state_v2";
+const STORAGE_KEY = "cliniflow_os_state_v3";
 
 export interface ToastItem {
   id: string;
