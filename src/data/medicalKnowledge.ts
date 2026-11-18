@@ -1,4 +1,4 @@
-import { ConsultationDisposition, DifferentialDiagnosis, Patient, VitalRecord } from "../types/clinic";
+import { ClinicState, ConsultationDisposition, DifferentialDiagnosis, PageId, Patient, VitalRecord } from "../types/clinic";
 
 export interface ClinicalCopilotOutput {
   redFlags: string[];
@@ -508,5 +508,267 @@ export function answerDoctorMedicalQuery(params: {
     suggestedLabs: ["Comprehensive Metabolic & HbA1c Panel", "Lipid Profile (Fasting)", "Polysomnography (Overnight Sleep Study)"],
     suggestedIcd: "E11.9",
     suggestedPlanSnippet: "Review metabolic & sleep profile, correlate vitals, order targeted lab panel and reinforce individualized diet/medication adherence.",
+  };
+}
+
+export type AiChatScope = "general" | "patient" | "section";
+
+export function answerScopedAiQuery(params: {
+  scope: AiChatScope;
+  query: string;
+  activePage: PageId;
+  state: ClinicState;
+  patient?: Patient;
+  vitals?: VitalRecord;
+  recentLabsSummary?: string;
+}): DoctorChatResponse {
+  const q = params.query.toLowerCase();
+
+  // 1. PATIENT SCOPE: Delegate to patient-specific Doctor CDSS
+  if (params.scope === "patient") {
+    return answerDoctorMedicalQuery({
+      query: params.query,
+      patient: params.patient,
+      vitals: params.vitals,
+      recentLabsSummary: params.recentLabsSummary,
+    });
+  }
+
+  // 2. SECTION SCOPE: Live operational & clinical summary tailored to the current page
+  if (params.scope === "section") {
+    const s = params.state;
+    const lowStock = s.inventory.filter((i) => i.stock <= i.reorderLevel);
+    const pendingInv = s.invoices.filter((i) => i.status !== "paid");
+    const pendingRx = s.prescriptions.filter((r) => r.status === "pending-dispense");
+    const flaggedReviews = s.reviews.filter((r) => r.status === "action-required");
+    const activeQueue = s.appointments.filter((a) => !a.isBlockedSlot && ["checked-in", "vitals-done", "in-consultation"].includes(a.status));
+
+    switch (params.activePage) {
+      case "pharmacy":
+      case "inventory":
+        return {
+          title: `Live Pharmacy & Inventory Intelligence`,
+          allergyAlert: lowStock.length > 0 ? `${lowStock.length} items are at or below reorder threshold (${lowStock.map((i) => i.name).slice(0, 3).join(", ")}).` : undefined,
+          answerSections: [
+            {
+              heading: "Current Stock & Dispensing Pulse",
+              bullets: [
+                `Pending e-Prescriptions to dispense: ${pendingRx.length}`,
+                `Low-stock items needing PO: ${lowStock.map((i) => `${i.name} (${i.stock} ${i.unit})`).join("; ") || "All items adequately stocked"}`,
+                `Open Purchase Orders: ${s.purchaseOrders.filter((p) => p.status === "ordered").length}`,
+              ],
+            },
+            {
+              heading: "Recommended Actions",
+              bullets: [
+                "Dispense queued doctor e-Rx items to auto-deduct batch stock and generate GST invoices.",
+                "Receive pending Purchase Orders in Inventory → Purchase Orders to replenish Augmentin & Vitamin D3.",
+              ],
+            },
+          ],
+          references: ["Live Inventory Master", "Pharmacy e-Rx Queue"],
+        };
+      case "billing":
+      case "dashboard":
+        return {
+          title: `Clinic Revenue, Receivables & Operations Snapshot`,
+          answerSections: [
+            {
+              heading: "Live Financial & Flow Metrics",
+              bullets: [
+                `Collected Revenue: ₹${s.invoices.reduce((sum, i) => sum + i.paidAmount, 0).toLocaleString()} across ${s.invoices.length} invoices`,
+                `Pending Receivables (${pendingInv.length} open): ₹${pendingInv.reduce((sum, i) => sum + Math.max(0, i.totalAmount - i.paidAmount), 0).toLocaleString()}`,
+                `Operating Expenses Logged: ₹${s.expenses.reduce((sum, e) => sum + e.amount, 0).toLocaleString()}`,
+                `Waiting / In-Consult Queue: ${activeQueue.length} patients active right now`,
+              ],
+            },
+            {
+              heading: "Priority Follow-Ups",
+              bullets: [
+                pendingInv.length > 0
+                  ? `Collect pending dues from: ${pendingInv.map((i) => `${i.customerName} (₹${i.totalAmount - i.paidAmount})`).join(", ")}`
+                  : "All invoices settled!",
+                `${flaggedReviews.length} patient review(s) flagged for front-desk resolution.`,
+              ],
+            },
+          ],
+          references: ["Live Billing Ledger", "Command Center KPIs"],
+        };
+      case "voice-whatsapp":
+      case "growth":
+        return {
+          title: `Voice AI, WhatsApp & Reputation Copilot`,
+          allergyAlert: flaggedReviews.length > 0 ? `${flaggedReviews.length} review(s) marked Action Required (<= 3★) awaiting follow-up.` : undefined,
+          answerSections: [
+            {
+              heading: "Omnichannel Engagement Status",
+              bullets: [
+                `Voice Helpline (${s.googleBusiness.phone}): ${s.voiceCallLogs.length} AI call logs recorded`,
+                `CRM Leads Pipeline: ${s.leads.filter((l) => l.stage !== "Converted").length} unconverted leads ready for 1-click booking`,
+                `Google Business Rating: ${s.googleBusiness.googleRating} ★ (${s.googleBusiness.googleReviewCount} reviews)`,
+              ],
+            },
+            {
+              heading: "Suggested Growth Actions",
+              bullets: [
+                "Resolve flagged feedback in Voice AI & WhatsApp → Reviews & Follow-Up with transparent Sleep Study / PFT tariff clarity.",
+                "Convert 'New' WhatsApp leads in CRM → Leads Pipeline into booked OPD slots.",
+              ],
+            },
+          ],
+          references: ["Dr. Kacker's Google Business Profile", "CRM & Reviews Workbench"],
+        };
+      case "calendar":
+      case "queue":
+        return {
+          title: `Live Schedule & Waiting Room Flow Summary`,
+          answerSections: [
+            {
+              heading: "Today's OPD & Telehealth Load",
+              bullets: [
+                `Total active bookings: ${s.appointments.filter((a) => !a.isBlockedSlot && a.status !== "cancelled").length}`,
+                `Waiting / Vitals / In-Consult: ${activeQueue.length} patients`,
+                `Video Telehealth slots: ${s.appointments.filter((a) => a.mode === "online" && a.status !== "cancelled").length}`,
+              ],
+            },
+            {
+              heading: "Flow Optimization Tips",
+              bullets: [
+                "Send automated WhatsApp reminders to any unconfirmed slots.",
+                "Move 'Checked-In' patients to 'Vitals Done' before starting Doctor EMR consultation.",
+              ],
+            },
+          ],
+          references: ["Unified Calendar", "Front Desk Token Queue"],
+        };
+      default:
+        return answerDoctorMedicalQuery({
+          query: params.query,
+          patient: params.patient,
+          vitals: params.vitals,
+          recentLabsSummary: params.recentLabsSummary,
+        });
+    }
+  }
+
+  // 3. GENERAL MEDICAL SCOPE (Universal ChatGPT / Gemini Medical Search — patient-agnostic)
+  if (q.includes("abg") || q.includes("acid") || q.includes("alkalosis") || q.includes("pco2") || q.includes("hco3")) {
+    return {
+      title: "ABG (Arterial Blood Gas) Rapid Stepwise Interpretation",
+      answerSections: [
+        {
+          heading: "Normal Reference Values",
+          bullets: ["pH: 7.35 – 7.45 | PaCO2: 35 – 45 mmHg | HCO3-: 22 – 26 mEq/L | PaO2: 80 – 100 mmHg"],
+        },
+        {
+          heading: "3-Step Clinical Rule (ROME)",
+          bullets: [
+            "1. Check pH (< 7.35 Acidemia, > 7.45 Alkalemia).",
+            "2. Respiratory Opposite: pH & PaCO2 move in opposite directions (e.g., Type 2 Resp Failure in COPD: ↓pH + ↑PaCO2).",
+            "3. Metabolic Equal: pH & HCO3- move in same direction; calculate Anion Gap = Na - (Cl + HCO3) (normal 8–12) if metabolic acidosis.",
+          ],
+        },
+      ],
+      references: ["BTS Respiratory Critical Care", "Goldman-Cecil Acid-Base Guide"],
+    };
+  }
+
+  if (q.includes("pediatric") || q.includes("child") || q.includes("paracetamol") || q.includes("amoxicillin") || q.includes("dosing") || q.includes("dose") || q.includes("metformin")) {
+    return {
+      title: "Clinical Pharmacology & Evidence-Based Dosing Reference",
+      answerSections: [
+        {
+          heading: "Common Outpatient & Pediatric Dosing",
+          bullets: [
+            "Paracetamol (Pediatric): 10–15 mg/kg/dose every 4–6h PRN (max 60 mg/kg/day). Adult: 500–650 mg q6h (max 3–4 g/day; reduce in hepatic disease).",
+            "Amoxicillin-Clavulanate (Adult): 625 mg PO TDS (or 1g BD) x 5–7 days. Pediatric: 25–45 mg/kg/day (amoxicillin component) divided q12h.",
+            "Azithromycin (Adult): 500 mg Day 1, then 250–500 mg OD x 3–5 days (check QTc if on other QT-prolonging drugs).",
+          ],
+        },
+        {
+          heading: "Renal / Hepatic Pearls",
+          bullets: [
+            "Metformin: Safe if eGFR >= 45 mL/min; halve max dose if eGFR 30–44; CONTRAINDICATED if eGFR < 30 (lactic acidosis risk).",
+            "NSAIDs: Avoid in eGFR < 30, active GI bleed, heart failure, or aspirin-exacerbated respiratory disease (AERD).",
+          ],
+        },
+      ],
+      references: ["WHO Model Formulary", "KDIGO Renal Dosing", "BNF Clinical Reference"],
+    };
+  }
+
+  if (q.includes("fever") || q.includes("dengue") || q.includes("malaria") || q.includes("typhoid") || q.includes("sepsis") || q.includes("qsofa")) {
+    return {
+      title: "Acute Febrile Illness & Sepsis (qSOFA) Diagnostic Approach",
+      answerSections: [
+        {
+          heading: "Red-Flag Screen (qSOFA >= 2 -> Sepsis Alert)",
+          bullets: [
+            "RR >= 22 breaths/min, Altered mentation (GCS < 15), or Systolic BP <= 100 mmHg.",
+            "Warning signs in tropical fevers (Dengue): Persistent vomiting, abdominal tenderness, mucosal bleed, rising hematocrit with falling platelets (< 50,000).",
+          ],
+        },
+        {
+          heading: "Stepwise Workup",
+          bullets: [
+            "Day 1–3 Fever: CBC + Peripheral Smear / Malaria Antigen + Dengue NS1 Antigen + Urine Routine.",
+            "Day 4+ Persistent Fever: Blood Cultures (x2 prior to antibiotics), Dengue IgM, Typhidot/Widal, LFT/RFT, Chest X-Ray if cough.",
+          ],
+        },
+      ],
+      references: ["WHO Dengue Guidelines", "Surviving Sepsis Campaign 2025", "ICMR Fever Protocol"],
+    };
+  }
+
+  if (q.includes("hypertension") || q.includes("bp") || q.includes("chest pain") || q.includes("ecg") || q.includes("acs")) {
+    return {
+      title: "Hypertension & Acute Chest Pain Triage Protocol",
+      answerSections: [
+        {
+          heading: "Chest Pain Immediate Rule-Out (Time-Critical)",
+          bullets: [
+            "Obtain 12-lead ECG within 10 minutes + serial hs-Troponin-I (0h / 1–3h).",
+            "Evaluate 5 life threats: ACS (STEMI/NSTEMI), Pulmonary Embolism (Wells score + D-Dimer/CTPA), Aortic Dissection, Tension Pneumothorax, Esophageal Rupture.",
+          ],
+        },
+        {
+          heading: "Hypertensive Urgency vs Emergency",
+          bullets: [
+            "BP >= 180/120 WITHOUT acute target-organ damage (Urgency): Oral uptitration over 24–48h (avoid rapid IV drops).",
+            "BP >= 180/120 WITH encephalopathy, ACS, pulmonary edema, or AKI (Emergency): Immediate ICU admission + titrated IV Labetalol/Nicardipine.",
+          ],
+        },
+      ],
+      references: ["ACC/AHA Chest Pain & HTN Guidelines", "ESC Acute Coronary Guidelines"],
+    };
+  }
+
+  if (q.includes("sleep") || q.includes("osa") || q.includes("apnea") || q.includes("asthma") || q.includes("copd") || q.includes("pft") || q.includes("hospital") || q.includes("curb")) {
+    return answerDoctorMedicalQuery({
+      query: params.query,
+      patient: undefined,
+    });
+  }
+
+  // General default comprehensive medical assistant response
+  return {
+    title: `General Medical AI Answer: "${params.query.slice(0, 60)}"`,
+    answerSections: [
+      {
+        heading: "Structured Clinical Approach",
+        bullets: [
+          "1. Clarify onset, duration, severity, triggers, and red-flag symptoms (hypoxemia SpO2 < 92%, hemodynamic instability, altered sensorium, chest pain).",
+          "2. Perform focused vital signs + targeted physical exam (Respiratory auscultation, CVS, ENT airway, or neurological screen).",
+          "3. Select high-yield investigations (CBC+CRP, Metabolic/HbA1c, PFT/Spirometry, Polysomnography, Chest X-Ray, ECG) before empiric escalation.",
+        ],
+      },
+      {
+        heading: "Try Specific Medical Searches",
+        bullets: [
+          "Ask about: 'ABG acid-base interpretation', 'Pediatric & renal drug dosing', 'Acute febrile illness & qSOFA', 'Chest pain & hypertensive urgency', 'OSA Sleep Study criteria', or switch scope to 'Patient' for chart-specific CDSS!",
+        ],
+      },
+    ],
+    references: ["Evidence-Based Clinical Medicine", "GINA / GOLD / AASM / ADA / ACC Guidelines"],
   };
 }

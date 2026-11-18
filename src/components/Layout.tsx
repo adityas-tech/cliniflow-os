@@ -292,10 +292,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   ? "bg-slate-900 border-slate-900 text-white"
                   : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
               }`}
-              title="Toggle Right-Side Doctor AI Search & Diagnostic Copilot"
+              title="Toggle Right-Side Collapsible AI Copilot"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Doctor AI</span>
+              <span className="hidden sm:inline">AI Copilot</span>
             </button>
 
             {/* Contextual Page Guide */}
