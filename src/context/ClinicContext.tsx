@@ -53,6 +53,10 @@ interface ClinicContextValue {
   tourActive: boolean;
   startTour: (startPage?: PageId) => void;
   stopTour: () => void;
+  doctorAiOpen: boolean;
+  setDoctorAiOpen: (open: boolean) => void;
+  pendingConsultInsert: { plan?: string; icd?: string; labs?: string[]; ts: number } | null;
+  pushToConsultation: (payload: { plan?: string; icd?: string; labs?: string[] }) => void;
 
   setRole: (role: UserRole) => void;
   setBranch: (branchId: string) => void;
@@ -141,6 +145,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [selectedPatientId, setSelectedPatientId] = useState<string>(SEED_STATE.patients[0].id);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [tourActive, setTourActive] = useState(false);
+  const [doctorAiOpen, setDoctorAiOpen] = useState(false);
+  const [pendingConsultInsert, setPendingConsultInsert] = useState<{ plan?: string; icd?: string; labs?: string[]; ts: number } | null>(null);
+
+  const pushToConsultation = (payload: { plan?: string; icd?: string; labs?: string[] }) => {
+    setPendingConsultInsert({ ...payload, ts: Date.now() });
+    setActivePage("patients");
+    notify("AI recommendations inserted into active consultation");
+  };
   const [completedTutorials, setCompletedTutorials] = useState<PageId[]>(() => {
     try {
       const raw = localStorage.getItem("cliniflow_tutorials_done_v1");
@@ -983,6 +995,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         tourActive,
         startTour,
         stopTour,
+        doctorAiOpen,
+        setDoctorAiOpen,
+        pendingConsultInsert,
+        pushToConsultation,
         setRole,
         setBranch,
         setPortalPatient,

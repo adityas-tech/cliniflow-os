@@ -34,7 +34,7 @@ interface DoctorConsultCopilotProps {
 }
 
 export const DoctorConsultCopilot: React.FC<DoctorConsultCopilotProps> = ({ patient }) => {
-  const { state, setRole, addClinicalNote, addLabOrder, addPrescription, notify } = useClinic();
+  const { state, setRole, addClinicalNote, addLabOrder, addPrescription, notify, pendingConsultInsert } = useClinic();
   const doctors = state.staff.filter((s) => s.role === "doctor");
   const latestVitals = patient.vitals[patient.vitals.length - 1];
 
@@ -90,6 +90,23 @@ export const DoctorConsultCopilot: React.FC<DoctorConsultCopilotProps> = ({ pati
   const streamTimerRef = useRef<number | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const speechRecRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!pendingConsultInsert) return;
+    if (pendingConsultInsert.plan) {
+      setPlanOfAction((prev) =>
+        prev ? `${prev}\n${pendingConsultInsert.plan}` : pendingConsultInsert.plan!
+      );
+    }
+    if (pendingConsultInsert.icd) {
+      setIcdCode(pendingConsultInsert.icd);
+    }
+    if (pendingConsultInsert.labs && pendingConsultInsert.labs.length > 0) {
+      setSelectedInvestigations((prev) =>
+        Array.from(new Set([...prev, ...pendingConsultInsert.labs!]))
+      );
+    }
+  }, [pendingConsultInsert]);
 
   useEffect(() => {
     return () => {

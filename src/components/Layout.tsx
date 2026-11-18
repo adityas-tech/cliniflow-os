@@ -28,6 +28,7 @@ import {
 import { useClinic } from "../context/ClinicContext";
 import { PageId, UserRole } from "../types/clinic";
 import { CommandPalette } from "./CommandPalette";
+import { DoctorAiDrawer } from "./DoctorAiDrawer";
 import { OnboardingModal } from "./OnboardingModal";
 import { QuickBookModal } from "./QuickBookModal";
 import { TourBanner } from "./TourBanner";
@@ -46,6 +47,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     tourActive,
     startTour,
     stopTour,
+    doctorAiOpen,
+    setDoctorAiOpen,
   } = useClinic();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [quickBookOpen, setQuickBookOpen] = useState(false);
@@ -230,7 +233,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ${doctorAiOpen ? "xl:pr-[430px]" : ""}`}>
         {/* Top Bar */}
         <header className="no-print h-16 bg-white border-b border-slate-200 px-4 lg:px-6 flex items-center justify-between gap-3 sticky top-0 z-30">
           <div className="flex items-center gap-3">
@@ -281,13 +284,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </select>
             </div>
 
-            {/* Quick AI Hub */}
+            {/* Right-Side Collapsible Doctor AI Copilot Toggle */}
             <button
-              onClick={() => setActivePage("ai-agents")}
-              className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 text-xs font-semibold transition"
+              onClick={() => setDoctorAiOpen(!doctorAiOpen)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                doctorAiOpen
+                  ? "bg-slate-900 border-slate-900 text-white"
+                  : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+              }`}
+              title="Toggle Right-Side Doctor AI Search & Diagnostic Copilot"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              AI Agents
+              <span className="hidden sm:inline">Doctor AI</span>
             </button>
 
             {/* Contextual Page Guide */}
@@ -344,6 +352,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <QuickBookModal open={quickBookOpen} onClose={() => setQuickBookOpen(false)} />
       <OnboardingModal open={onboardingOpen} mode={onboardingMode} onClose={closeOnboarding} onStartTour={(p) => startTour(p)} />
       <TourBanner active={tourActive} onClose={stopTour} completedIds={completedTutorials} onMarkCompleted={markTutorialDone} />
+      <DoctorAiDrawer />
     </div>
   );
 };

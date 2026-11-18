@@ -320,3 +320,193 @@ export const LIVE_MEETING_SCENARIOS = [
     ],
   },
 ];
+
+export interface DoctorChatResponse {
+  title: string;
+  answerSections: Array<{ heading: string; bullets: string[] }>;
+  references: string[];
+  allergyAlert?: string;
+  suggestedLabs?: string[];
+  suggestedPlanSnippet?: string;
+  suggestedIcd?: string;
+}
+
+export function answerDoctorMedicalQuery(params: {
+  query: string;
+  patient?: Patient;
+  vitals?: VitalRecord;
+  recentLabsSummary?: string;
+}): DoctorChatResponse {
+  const q = params.query.toLowerCase();
+  const pat = params.patient;
+  const allergies = (pat?.allergies || []).filter((a) => a !== "None Known");
+  const allergyText = allergies.length > 0 ? allergies.join(", ") : "None documented";
+  const hasPenicillinAllergy = allergies.some((a) => a.toLowerCase().includes("penicillin"));
+  const hasNsaidAllergy = allergies.some((a) => a.toLowerCase().includes("ibuprofen") || a.toLowerCase().includes("aspirin"));
+  const hasSulfaAllergy = allergies.some((a) => a.toLowerCase().includes("sulfa"));
+
+  const vitalsStr = params.vitals
+    ? `BP ${params.vitals.bpSystolic}/${params.vitals.bpDiastolic} mmHg, HR ${params.vitals.heartRate} bpm, SpO2 ${params.vitals.spo2}%, Temp ${params.vitals.temperatureF}°F${params.vitals.bloodGlucoseMgDl ? `, Glucose ${params.vitals.bloodGlucoseMgDl} mg/dL` : ""}`
+    : "No vitals recorded today";
+
+  // 1. Drug interaction / Allergy-safe antibiotic or medication query
+  if (q.includes("antibiotic") || q.includes("drug") || q.includes("allergy") || q.includes("interaction") || q.includes("safe") || q.includes("medicine")) {
+    const alerts: string[] = [];
+    if (hasPenicillinAllergy) alerts.push("AVOID Amoxicillin / Augmentin / Piperacillin (Penicillin allergy documented).");
+    if (hasSulfaAllergy) alerts.push("AVOID TMP-SMX (Co-trimoxazole) / Sulfonamides (Sulfa allergy documented).");
+    if (hasNsaidAllergy) alerts.push("AVOID Ibuprofen / Diclofenac / Aspirin (NSAID allergy documented).");
+
+    return {
+      title: `Allergy-Safe Pharmacotherapy & Interaction Check (${pat?.name || "Patient"})`,
+      allergyAlert: alerts.length > 0 ? alerts.join(" ") : undefined,
+      answerSections: [
+        {
+          heading: "Patient Safety Profile",
+          bullets: [
+            `Documented Allergies: ${allergyText}`,
+            `Chronic Conditions: ${pat?.chronicConditions.join(", ") || "None"}`,
+            `Current Vitals: ${vitalsStr}`,
+          ],
+        },
+        {
+          heading: "Recommended Safe Options (Respiratory / ENT)",
+          bullets: [
+            hasPenicillinAllergy
+              ? "Community-Acquired LRTI/Sinusitis: Azithromycin 500mg OD x 5d OR Levofloxacin 750mg OD x 5d (avoiding Beta-Lactams)."
+              : "First-line Bacterial LRTI/ENT: Amoxicillin-Clavulanate 625mg TDS x 5–7d or Cefuroxime 500mg BD.",
+            hasNsaidAllergy
+              ? "Analgesic/Antipyretic: Paracetamol (Dolo) 650mg SOS (max 3g/day); avoid all NSAIDs."
+              : "Analgesic/Antipyretic: Paracetamol 650mg SOS; caution with NSAIDs if asthmatic/renal impairment.",
+            "Airway Controller: Budesonide-Formoterol 200/6 mcg MART regimen (minimal systemic interaction).",
+          ],
+        },
+      ],
+      references: ["IDSA/ATS CAP Guidelines", "GINA 2025 Pharmacotherapy", "Patient Allergy Registry"],
+      suggestedPlanSnippet: `Allergy-verified regimen (${hasPenicillinAllergy ? "Macrolide/Fluoroquinolone preferred, avoid Penicillins" : "Standard empiric coverage"}). Monitor clinical response in 48–72 hours.`,
+    };
+  }
+
+  // 2. Hospitalization / CURB-65 / Red flags / ICU triage
+  if (q.includes("hospital") || q.includes("admit") || q.includes("curb") || q.includes("icu") || q.includes("red flag") || q.includes("spo2") || q.includes("hdu")) {
+    const lowSpo2 = (params.vitals?.spo2 || 99) < 92;
+    return {
+      title: "Inpatient Admission & Respiratory Red-Flag Criteria (CURB-65 / NEWS2)",
+      allergyAlert: lowSpo2 ? `CRITICAL: Patient's latest SpO2 is ${params.vitals?.spo2}% (< 92%) — meets threshold for Respiratory HDU / Supplemental O2!` : undefined,
+      answerSections: [
+        {
+          heading: "Immediate Hospitalization Triggers",
+          bullets: [
+            "Resting SpO2 < 92% on room air (or < 88% in known hypercapnic COPD) or PaO2 < 60 mmHg on ABG.",
+            "Respiratory Rate >= 28–30/min, accessory muscle fatigue, silent chest, or inability to speak full sentences.",
+            "Hemodynamic instability: SBP < 90 mmHg, DBP <= 60 mmHg, or altered sensorium (Confusion).",
+            "CURB-65 Score >= 2 (General Ward) or >= 3 (ICU / Respiratory HDU evaluation).",
+          ],
+        },
+        {
+          heading: "Immediate Stabilization Protocol",
+          bullets: [
+            "Titrate O2 via nasal cannula/Venturi mask targeting SpO2 94–98% (88–92% if COPD hypercapnia risk).",
+            "Stat ABG, Chest X-Ray PA, CBC + CRP + Procalcitonin + Blood Cultures prior to IV antibiotics.",
+            "Nebulized Salbutamol 2.5mg + Ipratropium 500mcg q20min x 3 + IV Hydrocortisone 100mg / Methylprednisolone.",
+          ],
+        },
+      ],
+      references: ["BTS Oxygen Guidelines", "CURB-65 Severity Score", "GOLD Acute Exacerbation Protocol"],
+      suggestedLabs: ["Arterial Blood Gas (ABG)", "Chest X-Ray (PA View)", "Complete Blood Count (CBC) + CRP + ESR"],
+      suggestedPlanSnippet: "Evaluate for Respiratory HDU admission if SpO2 < 92% or CURB-65 >= 2; order stat ABG, CXR & CBC+CRP.",
+    };
+  }
+
+  // 3. Sleep Apnea / OSA / Snoring / Sleep Study
+  if (q.includes("sleep") || q.includes("osa") || q.includes("apnea") || q.includes("snor") || q.includes("stop-bang") || q.includes("cpap")) {
+    return {
+      title: "Obstructive Sleep Apnea (OSA) Diagnostic & Management Guide",
+      answerSections: [
+        {
+          heading: "STOP-BANG & Clinical Assessment",
+          bullets: [
+            "Evaluate Snoring, Tiredness, Observed apneas, high BP, BMI > 35, Age > 50, Neck circumference > 40cm, Gender (Male).",
+            "ENT Airway Exam: Mallampati grade III/IV, tonsillar hypertrophy, deviated nasal septum, retrognathia.",
+            `Patient Baseline: ${pat?.name || "Patient"} (${pat?.age || "—"}y ${pat?.gender || ""}), ${vitalsStr}.`,
+          ],
+        },
+        {
+          heading: "Diagnostic Thresholds (AHI) & Treatment",
+          bullets: [
+            "Mild OSA (AHI 5–14): Positional therapy, weight loss, oral appliance / nasal steroid if rhinitis.",
+            "Moderate-Severe OSA (AHI >= 15, or >= 5 with daytime sleepiness/HTN/DM): Gold-standard Auto-CPAP / BiPAP titration.",
+            "Refractory nasal obstruction or anatomical collapse: Refer to ENT Head & Neck Surgeon (Dr. Rishabh Kacker) for DISE / surgery.",
+          ],
+        },
+      ],
+      references: ["AASM Clinical Practice Guideline for Adult OSA", "Dr. Kacker's Sleep Lab Protocol"],
+      suggestedLabs: ["Polysomnography (Overnight Sleep Study)", "Diagnostic Nasal / ENT Endoscopy", "Thyroid Profile (T3, T4, TSH)"],
+      suggestedIcd: "G47.33",
+      suggestedPlanSnippet: "Order Level-1/Home Polysomnography (Sleep Study) + ENT Nasal Endoscopy; counsel on sleep hygiene & CPAP trial if AHI >= 15.",
+    };
+  }
+
+  // 4. Asthma / COPD / PFT / Inhaler step-up
+  if (q.includes("asthma") || q.includes("copd") || q.includes("pft") || q.includes("inhaler") || q.includes("wheez") || q.includes("cough")) {
+    return {
+      title: "Asthma & COPD Stepwise Management & PFT Interpretation",
+      answerSections: [
+        {
+          heading: "Spirometry (PFT) Diagnostic Keys",
+          bullets: [
+            "Asthma: Variable airflow limitation; post-bronchodilator FEV1 increase >= 12% AND >= 200 mL.",
+            "COPD: Persistent airflow limitation; post-bronchodilator FEV1/FVC < 0.70.",
+            "Assess blood eosinophils (> 300 cells/µL favors ICS responsiveness) & Total IgE / Allergy Skin Prick if atopic.",
+          ],
+        },
+        {
+          heading: "GINA 2025 / GOLD Evidence-Based Therapy",
+          bullets: [
+            "Asthma Track 1 (Preferred): Low-dose ICS-Formoterol (Budesonide/Formoterol 200/6 mcg) as both maintenance & reliever (MART).",
+            "COPD Group B/E: LABA + LAMA dual bronchodilator; add ICS if frequent exacerbations + eosinophils >= 300.",
+            "Verify inhaler technique + spacer use at every visit; screen for allergic rhinitis or GERD overlap.",
+          ],
+        },
+      ],
+      references: ["GINA 2025 Global Strategy", "GOLD 2025 COPD Report"],
+      suggestedLabs: ["Pulmonary Function Test (PFT / Spirometry)", "Comprehensive Allergy Skin Prick / IgE Panel", "Chest X-Ray (PA View)"],
+      suggestedIcd: "J45.909",
+      suggestedPlanSnippet: "Perform PFT with bronchodilator reversibility + Allergy panel; initiate Budesonide-Formoterol MART inhaler & spacer counselling.",
+    };
+  }
+
+  // 5. Lab interpretation / HbA1c / Metabolic / Differential for current patient
+  return {
+    title: `Clinical Case Synthesis & Differential Workup — ${pat?.name || "Current Patient"}`,
+    allergyAlert: allergies.length > 0 ? `Safety Reminder — Documented Allergies: ${allergyText}` : undefined,
+    answerSections: [
+      {
+        heading: "Patient Context & Biomarkers",
+        bullets: [
+          `Profile: ${pat?.age || "—"}y ${pat?.gender || ""} • Conditions: ${pat?.chronicConditions.join(", ") || "None"}`,
+          `Latest Vitals: ${vitalsStr}`,
+          `Recent Labs: ${params.recentLabsSummary || "Review pending lab orders in EMR"}`,
+        ],
+      },
+      {
+        heading: "Clinical Diagnostic Considerations",
+        bullets: [
+          "Correlate metabolic status (HbA1c, Fasting Glucose, Lipids) with sleep quality & blood pressure (OSA frequently co-exists with Type 2 DM & resistant HTN).",
+          "Check Vitamin D3 & Thyroid profile if persistent fatigue or myalgia is reported.",
+          "Ensure targeted organ-system exam (Chest auscultation, ENT airway, CVS, and peripheral foot/neuro check if diabetic).",
+        ],
+      },
+      {
+        heading: "Suggested Next Diagnostic Steps",
+        bullets: [
+          "Order/review Comprehensive Metabolic + HbA1c Panel, Lipid Profile, and PFT/Sleep Study if respiratory or snoring symptoms are present.",
+          "Provide structured NutriPlan low-GI diet + Zone-2 post-meal walking protocol.",
+        ],
+      },
+    ],
+    references: ["ADA Standards of Care 2026", "ACC/AHA Hypertension Guidelines", "AASM OSA Screening"],
+    suggestedLabs: ["Comprehensive Metabolic & HbA1c Panel", "Lipid Profile (Fasting)", "Polysomnography (Overnight Sleep Study)"],
+    suggestedIcd: "E11.9",
+    suggestedPlanSnippet: "Review metabolic & sleep profile, correlate vitals, order targeted lab panel and reinforce individualized diet/medication adherence.",
+  };
+}
