@@ -32,6 +32,7 @@ export type PageId =
   | "calendar"
   | "queue"
   | "patients"
+  | "prescription-pad"
   | "pharmacy"
   | "inventory"
   | "billing"
@@ -39,6 +40,7 @@ export type PageId =
   | "voice-whatsapp"
   | "ai-agents"
   | "reports"
+  | "analytics"
   | "patient-portal"
   | "tutorials";
 
@@ -234,6 +236,9 @@ export interface WorkoutPlan {
 export interface Patient {
   id: string;
   mrn: string;
+  uhid?: string;
+  abhaId?: string;
+  abhaStatus?: "No ABHA" | "ABHA Linked";
   name: string;
   phone: string;
   email: string;
@@ -285,6 +290,14 @@ export interface Appointment {
   reminderSent: boolean;
   isBlockedSlot?: boolean;
   source: "Front Desk" | "Online Microsite" | "WhatsApp AI" | "Voice AI Call" | "Follow-up";
+  visitType?: "Walkin" | "Booked" | "Follow Up";
+  paymentStatus?: "paid" | "pending";
+  paymentMethod?: "Cash" | "UPI" | "Card";
+  consultationFee?: number;
+  servicesAdded?: string[];
+  appointmentTag?: string;
+  isNewPatient?: boolean;
+  waitMinutes?: number;
 }
 
 export interface InventoryItem {
@@ -499,6 +512,84 @@ export interface AuditLogEntry {
   details: string;
 }
 
+export interface RxDraftMedication {
+  id: string;
+  inventoryItemId?: string;
+  brandName: string;
+  genericComposition?: string;
+  dosage: string;
+  frequency: string;
+  timing: "After Food" | "Before Food" | "Empty Stomach" | "Bedtime";
+  durationDays: number;
+  instructions?: string;
+  hindiInstructions?: string;
+}
+
+export interface RxDraftLabResult {
+  id: string;
+  parameter: string;
+  value: string;
+  unit: string;
+  reference: string;
+  outOfRange: boolean;
+}
+
+export interface RxCustomSection {
+  id: string;
+  title: string;
+  content: string;
+}
+
+export interface PrescriptionDraft {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  appointmentId?: string;
+  createdAt: string;
+  status: "draft" | "pushed" | "finished";
+  lastUpdatedBy: string;
+  lastUpdatedMinutesAgo: number;
+  instructionLanguage: "en" | "hi";
+  vitals: {
+    pulse: string;
+    spo2: string;
+    bp: string;
+    heightCm: string;
+    weightKg: string;
+    bmi: string;
+    lymphNodes: string;
+    anemia: string;
+    lockedFields: string[];
+  };
+  noKnownMedicalHistory: boolean;
+  medicalHistoryTags: string[];
+  extraHistory: {
+    medications?: string;
+    familyHistory?: string;
+    lifestyleHabit?: string;
+    foodAllergy?: string;
+    drugAllergy?: string;
+    otherHistory?: string;
+  };
+  patientNotes: string;
+  privateNotes: string;
+  symptoms: Array<{ name: string; icdCode?: string }>;
+  diagnoses: Array<{ name: string; icdCode?: string }>;
+  examinationFindings: string;
+  medications: RxDraftMedication[];
+  labInvestigations: string[];
+  labResults: RxDraftLabResult[];
+  printOnlyOutOfRange: boolean;
+  referToDoctor: string;
+  followUpDays?: number;
+  followUpDate?: string;
+  advices: string;
+  injections: string;
+  procedures: string;
+  customSections: RxCustomSection[];
+  canvasDataUrl?: string;
+}
+
 export interface ClinicState {
   branches: Branch[];
   activeBranchId: string;
@@ -509,6 +600,7 @@ export interface ClinicState {
   appointments: Appointment[];
   clinicalNotes: ClinicalNote[];
   prescriptions: Prescription[];
+  prescriptionDrafts: PrescriptionDraft[];
   labOrders: LabOrder[];
   dietPlans: DietPlan[];
   workoutPlans: WorkoutPlan[];

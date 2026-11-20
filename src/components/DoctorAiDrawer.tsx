@@ -45,8 +45,9 @@ interface ChatThread {
 const PAGE_LABELS: Record<PageId, string> = {
   dashboard: "Command Center",
   calendar: "Calendar & Telehealth",
-  queue: "Front Desk Queue",
-  patients: "Patients & EMR 360",
+  queue: "OPD Queue",
+  patients: "Patients & Visit Hub",
+  "prescription-pad": "Prescription Pad v2",
   pharmacy: "Pharmacy & POS",
   inventory: "Inventory & Vendors",
   billing: "Billing & Memberships",
@@ -54,6 +55,7 @@ const PAGE_LABELS: Record<PageId, string> = {
   "voice-whatsapp": "Voice AI & WhatsApp",
   "ai-agents": "AI Agents Hub",
   reports: "Reports & Audit",
+  analytics: "Dr Analytics BI",
   "patient-portal": "Patient Portal",
   tutorials: "Tutorials & Academy",
 };

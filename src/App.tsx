@@ -2,6 +2,7 @@ import React from "react";
 import { Layout } from "./components/Layout";
 import { ClinicProvider, useClinic } from "./context/ClinicContext";
 import { AiAgentsPage } from "./pages/AiAgentsPage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { BillingFinancePage } from "./pages/BillingFinancePage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -10,6 +11,7 @@ import { InventoryPage } from "./pages/InventoryPage";
 import { PatientPortalPage } from "./pages/PatientPortalPage";
 import { PatientsEmrPage } from "./pages/PatientsEmrPage";
 import { PharmacyPosPage } from "./pages/PharmacyPosPage";
+import { PrescriptionPadPage } from "./pages/PrescriptionPadPage";
 import { QueueAttendancePage } from "./pages/QueueAttendancePage";
 import { ReportsIntegrationsPage } from "./pages/ReportsIntegrationsPage";
 import { TutorialsPage } from "./pages/TutorialsPage";
@@ -27,6 +29,8 @@ const PageRouter: React.FC = () => {
       return <QueueAttendancePage />;
     case "patients":
       return <PatientsEmrPage />;
+    case "prescription-pad":
+      return <PrescriptionPadPage />;
     case "pharmacy":
       return <PharmacyPosPage />;
     case "inventory":
@@ -41,12 +45,14 @@ const PageRouter: React.FC = () => {
       return <AiAgentsPage />;
     case "reports":
       return <ReportsIntegrationsPage />;
+    case "analytics":
+      return <AnalyticsPage />;
     case "patient-portal":
       return <PatientPortalPage />;
     case "tutorials":
       return <TutorialsPage />;
     default:
-      return <DashboardPage />;
+      return <QueueAttendancePage />;
   }
 };
 

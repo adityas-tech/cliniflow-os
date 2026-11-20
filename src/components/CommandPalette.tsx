@@ -9,7 +9,7 @@ interface CommandPaletteProps {
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose, onOpenQuickBook }) => {
-  const { state, setActivePage, setSelectedPatientId } = useClinic();
+  const { state, setActivePage, openPatientVisitHub } = useClinic();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -84,8 +84,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose, o
                 <button
                   key={p.id}
                   onClick={() => {
-                    setSelectedPatientId(p.id);
-                    setActivePage("patients");
+                    openPatientVisitHub(p.id);
                     onClose();
                   }}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm hover:bg-slate-50 transition"

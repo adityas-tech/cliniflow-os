@@ -21,6 +21,7 @@ import {
   Patient,
   PatientReview,
   Prescription,
+  PrescriptionDraft,
   PurchaseOrder,
   UserRole,
   VitalRecord,
@@ -28,7 +29,7 @@ import {
   WorkoutPlan,
 } from "../types/clinic";
 
-const STORAGE_KEY = "cliniflow_os_state_v3";
+const STORAGE_KEY = "cliniflow_os_state_v4";
 
 export interface ToastItem {
   id: string;
@@ -43,6 +44,20 @@ interface ClinicContextValue {
   setActivePage: (page: PageId) => void;
   selectedPatientId: string;
   setSelectedPatientId: (id: string) => void;
+  patientViewMode: "directory" | "visit-hub";
+  setPatientViewMode: (mode: "directory" | "visit-hub") => void;
+  activeRxId: string | null;
+  setActiveRxId: (id: string | null) => void;
+  voiceRxAutoStart: boolean;
+  setVoiceRxAutoStart: (val: boolean) => void;
+  openPatientVisitHub: (patientId: string) => void;
+  openPrescriptionPad: (patientId: string, appointmentId?: string, options?: { autoVoice?: boolean }) => void;
+  savePrescriptionDraft: (rxId: string, patch: Partial<PrescriptionDraft>) => void;
+  pushPrescriptionUpdates: (rxId: string) => void;
+  finishPrescription: (rxId: string) => void;
+  linkPatientAbha: (patientId: string, abhaId: string) => void;
+  mergePatients: (primaryId: string, duplicateId: string) => void;
+  updateAppointmentDetails: (id: string, patch: Partial<Appointment>) => void;
   toasts: ToastItem[];
   notify: (title: string, description?: string, type?: ToastItem["type"]) => void;
   dismissToast: (id: string) => void;
@@ -141,8 +156,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return SEED_STATE;
   });
 
-  const [activePage, setActivePage] = useState<PageId>("dashboard");
+  const [activePage, setActivePage] = useState<PageId>("queue");
   const [selectedPatientId, setSelectedPatientId] = useState<string>(SEED_STATE.patients[0].id);
+  const [patientViewMode, setPatientViewMode] = useState<"directory" | "visit-hub">("directory");
+  const [activeRxId, setActiveRxId] = useState<string | null>(SEED_STATE.prescriptionDrafts[0]?.id || null);
+  const [voiceRxAutoStart, setVoiceRxAutoStart] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [tourActive, setTourActive] = useState(false);
   const [doctorAiOpen, setDoctorAiOpen] = useState(false);
@@ -241,17 +259,315 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const startConsultation = (patientId: string, appointmentId?: string) => {
+    openPrescriptionPad(patientId, appointmentId);
+  };
+
+  const openPatientVisitHub = (patientId: string) => {
     setSelectedPatientId(patientId);
-    if (appointmentId) {
+    setPatientViewMode("visit-hub");
+    setActivePage("patients");
+  };
+
+  const openPrescriptionPad = (
+    patientId: string,
+    appointmentId?: string,
+    options?: { autoVoice?: boolean }
+  ) => {
+    setSelectedPatientId(patientId);
+    const existing = state.prescriptionDrafts.find(
+      (d) =>
+        d.status !== "finished" &&
+        ((appointmentId && d.appointmentId === appointmentId) ||
+          (!appointmentId && d.patientId === patientId))
+    );
+
+    if (existing) {
+      setActiveRxId(existing.id);
+    } else {
+      const pat = state.patients.find((p) => p.id === patientId);
+      const latestV = pat?.vitals[pat.vitals.length - 1];
+      const hCm = latestV?.heightCm || 168;
+      const wKg = latestV?.weightKg || 68;
+      const bmiVal = hCm > 0 ? (wKg / Math.pow(hCm / 100, 2)).toFixed(1) : "";
+      const newId = `P-DW-${Math.random().toString(16).slice(2, 10).toUpperCase()}-${Math.random().toString(16).slice(2, 6).toUpperCase()}-${Math.random().toString(16).slice(2, 6).toUpperCase()}`;
+
+      const newDraft: PrescriptionDraft = {
+        id: newId,
+        patientId,
+        doctorId: state.staff.find((s) => s.role === "doctor")?.id || "doc-1",
+        appointmentId,
+        createdAt: `${TODAY_STR} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+        status: "draft",
+        lastUpdatedBy: state.activeRole === "reception" ? "Staff Doctor (Staff)" : "Dr. Rajeev Kacker",
+        lastUpdatedMinutesAgo: 0,
+        instructionLanguage: "hi",
+        vitals: {
+          pulse: latestV?.heartRate ? String(latestV.heartRate) : "76",
+          spo2: latestV?.spo2 ? String(latestV.spo2) : "98",
+          bp: latestV ? `${latestV.bpSystolic}/${latestV.bpDiastolic}` : "120/80",
+          heightCm: String(hCm),
+          weightKg: String(wKg),
+          bmi: bmiVal,
+          lymphNodes: "",
+          anemia: "",
+          lockedFields: latestV ? ["pulse", "spo2", "bp", "heightCm", "weightKg", "bmi"] : [],
+        },
+        noKnownMedicalHistory: (pat?.chronicConditions?.length || 0) === 0,
+        medicalHistoryTags: pat?.chronicConditions ? [...pat.chronicConditions] : [],
+        extraHistory: {},
+        patientNotes: "",
+        privateNotes: "",
+        symptoms: [],
+        diagnoses: [],
+        examinationFindings: "",
+        medications: [],
+        labInvestigations: [],
+        labResults: [],
+        printOnlyOutOfRange: true,
+        referToDoctor: "",
+        followUpDays: 3,
+        advices: "",
+        injections: "",
+        procedures: "",
+        customSections: [],
+      };
+
+      setState((prev) => ({
+        ...prev,
+        prescriptionDrafts: [newDraft, ...prev.prescriptionDrafts],
+        appointments: appointmentId
+          ? prev.appointments.map((a) =>
+              a.id === appointmentId ? { ...a, status: "in-consultation" } : a
+            )
+          : prev.appointments,
+        auditLogs: appendAudit(
+          prev,
+          "Prescription Pad v2",
+          "Opened Rx Pad",
+          `Started Rx ${newId} for ${pat?.name || patientId}`
+        ),
+      }));
+      setActiveRxId(newId);
+    }
+
+    if (appointmentId && existing) {
       setState((prev) => ({
         ...prev,
         appointments: prev.appointments.map((a) =>
           a.id === appointmentId ? { ...a, status: "in-consultation" } : a
         ),
-        auditLogs: appendAudit(prev, "Consultation", "Started Consultation", `Opened Healthboard for appointment ${appointmentId}`),
       }));
     }
-    setActivePage("patients");
+
+    setVoiceRxAutoStart(Boolean(options?.autoVoice));
+    setActivePage("prescription-pad");
+  };
+
+  const savePrescriptionDraft = (rxId: string, patch: Partial<PrescriptionDraft>) => {
+    setState((prev) => ({
+      ...prev,
+      prescriptionDrafts: prev.prescriptionDrafts.map((d) =>
+        d.id === rxId ? { ...d, ...patch } : d
+      ),
+    }));
+  };
+
+  const pushPrescriptionUpdates = (rxId: string) => {
+    setState((prev) => {
+      const draft = prev.prescriptionDrafts.find((d) => d.id === rxId);
+      const pat = prev.patients.find((p) => p.id === draft?.patientId);
+      return {
+        ...prev,
+        prescriptionDrafts: prev.prescriptionDrafts.map((d) =>
+          d.id === rxId
+            ? {
+                ...d,
+                status: "pushed",
+                lastUpdatedBy: "Dr. Rajeev Kacker",
+                lastUpdatedMinutesAgo: 0,
+              }
+            : d
+        ),
+        auditLogs: appendAudit(
+          prev,
+          "Prescription Pad v2",
+          "Pushed Rx Updates",
+          `Synced live draft ${rxId} for ${pat?.name || "patient"}`
+        ),
+      };
+    });
+    notify("Prescription updates pushed", "Synced to Staff & Patient portal draft");
+  };
+
+  const finishPrescription = (rxId: string) => {
+    const draft = state.prescriptionDrafts.find((d) => d.id === rxId);
+    if (!draft) return;
+    const pat = state.patients.find((p) => p.id === draft.patientId);
+    const diagText =
+      draft.diagnoses.map((d) => d.name).join(", ") ||
+      draft.symptoms.map((s) => s.name).join(", ") ||
+      "Outpatient Consultation";
+
+    // Create ClinicalNote
+    const newNote: ClinicalNote = {
+      id: uid("cn"),
+      patientId: draft.patientId,
+      doctorId: draft.doctorId,
+      appointmentId: draft.appointmentId,
+      createdAt: `${TODAY_STR} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+      templateType: "Pulmonology & Sleep",
+      chiefComplaint: draft.symptoms.map((s) => s.name).join(", ") || "OPD Follow-up",
+      symptoms: draft.symptoms.map((s) => s.name),
+      onExamination: {
+        respiratory: draft.examinationFindings || `BP ${draft.vitals.bp}, SpO2 ${draft.vitals.spo2}%, Pulse ${draft.vitals.pulse}/min`,
+      },
+      subjective: `Symptoms: ${draft.symptoms.map((s) => s.name).join(", ") || "—"}`,
+      objective: `Vitals: Pulse ${draft.vitals.pulse}/min, SpO2 ${draft.vitals.spo2}%, BP ${draft.vitals.bp}, BMI ${draft.vitals.bmi}. ${draft.examinationFindings}`,
+      assessment: diagText,
+      plan: [draft.advices, draft.patientNotes, draft.referToDoctor ? `Refer: ${draft.referToDoctor}` : ""].filter(Boolean).join(" | ") || "Follow up as advised",
+      icdCode: draft.diagnoses[0]?.icdCode,
+      investigationsRequired: draft.labInvestigations,
+      medicinesSummary: draft.medications.map((m) => `${m.brandName} (${m.frequency})`),
+      disposition: draft.referToDoctor ? "Specialist Referral" : "Outpatient Follow-Up",
+    };
+
+    // Create Pharmacy Prescription if meds exist
+    const newRx: Prescription | null =
+      draft.medications.length > 0
+        ? {
+            id: uid("rx"),
+            patientId: draft.patientId,
+            doctorId: draft.doctorId,
+            appointmentId: draft.appointmentId,
+            createdAt: `${TODAY_STR} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+            diagnosis: diagText,
+            items: draft.medications.map((m) => ({
+              id: m.id,
+              inventoryItemId: m.inventoryItemId,
+              medicineName: m.brandName,
+              dosage: m.dosage,
+              frequency: m.frequency,
+              timing: m.timing,
+              durationDays: m.durationDays,
+              quantity: Math.max(1, m.durationDays * (m.frequency === "1-0-1" ? 2 : m.frequency === "1-1-1" ? 3 : 1)),
+              instructions: draft.instructionLanguage === "hi" ? m.hindiInstructions : m.instructions,
+            })),
+            notes: draft.advices || draft.patientNotes,
+            status: "pending-dispense",
+            sentViaWhatsApp: true,
+          }
+        : null;
+
+    // Create LabOrders if investigations exist
+    const newLabs: LabOrder[] = draft.labInvestigations.map((testName) => ({
+      id: uid("lab"),
+      patientId: draft.patientId,
+      doctorId: draft.doctorId,
+      testName,
+      category: "Diagnostics",
+      orderedAt: TODAY_STR,
+      status: "ordered",
+      priority: "routine",
+      cost: 650,
+    }));
+
+    setState((prev) => ({
+      ...prev,
+      prescriptionDrafts: prev.prescriptionDrafts.map((d) =>
+        d.id === rxId ? { ...d, status: "finished", lastUpdatedMinutesAgo: 0 } : d
+      ),
+      clinicalNotes: [newNote, ...prev.clinicalNotes],
+      prescriptions: newRx ? [newRx, ...prev.prescriptions] : prev.prescriptions,
+      labOrders: [...newLabs, ...prev.labOrders],
+      appointments: draft.appointmentId
+        ? prev.appointments.map((a) =>
+            a.id === draft.appointmentId ? { ...a, status: "completed" } : a
+          )
+        : prev.appointments,
+      patients: prev.patients.map((p) =>
+        p.id === draft.patientId
+          ? {
+              ...p,
+              lastVisit: TODAY_STR,
+              communicationLog: [
+                {
+                  id: uid("comm"),
+                  channel: "WhatsApp",
+                  message: `Digital Prescription finalized for ${diagText} (${draft.medications.length} medicines, ${draft.labInvestigations.length} tests).`,
+                  sentAt: "Just now",
+                  status: "delivered",
+                },
+                ...p.communicationLog,
+              ],
+            }
+          : p
+      ),
+      auditLogs: appendAudit(
+        prev,
+        "Prescription Pad v2",
+        "Finished Prescription",
+        `Finalized Rx for ${pat?.name || draft.patientId} (${draft.medications.length} meds, ${newLabs.length} labs)`
+      ),
+    }));
+
+    notify(
+      `Prescription finalized for ${pat?.name || "Patient"}`,
+      `${draft.medications.length} meds queued to Pharmacy & ${newLabs.length} lab orders synced`
+    );
+    setActivePage("queue");
+  };
+
+  const linkPatientAbha = (patientId: string, abhaId: string) => {
+    setState((prev) => ({
+      ...prev,
+      patients: prev.patients.map((p) =>
+        p.id === patientId
+          ? { ...p, abhaId: abhaId.trim(), abhaStatus: "ABHA Linked" }
+          : p
+      ),
+      auditLogs: appendAudit(prev, "ABHA", "Linked ABHA ID", `Linked ${abhaId} to patient ${patientId}`),
+    }));
+    notify("ABHA ID linked successfully", abhaId);
+  };
+
+  const mergePatients = (primaryId: string, duplicateId: string) => {
+    if (primaryId === duplicateId) return;
+    setState((prev) => {
+      const primary = prev.patients.find((p) => p.id === primaryId);
+      const dup = prev.patients.find((p) => p.id === duplicateId);
+      if (!primary || !dup) return prev;
+      return {
+        ...prev,
+        patients: prev.patients
+          .filter((p) => p.id !== duplicateId)
+          .map((p) =>
+            p.id === primaryId
+              ? {
+                  ...p,
+                  vitals: [...p.vitals, ...dup.vitals],
+                  chronicConditions: Array.from(new Set([...p.chronicConditions, ...dup.chronicConditions])),
+                  abhaId: p.abhaId || dup.abhaId,
+                  abhaStatus: p.abhaStatus === "ABHA Linked" || dup.abhaStatus === "ABHA Linked" ? "ABHA Linked" : "No ABHA",
+                }
+              : p
+          ),
+        appointments: prev.appointments.map((a) => (a.patientId === duplicateId ? { ...a, patientId: primaryId } : a)),
+        clinicalNotes: prev.clinicalNotes.map((n) => (n.patientId === duplicateId ? { ...n, patientId: primaryId } : n)),
+        prescriptions: prev.prescriptions.map((r) => (r.patientId === duplicateId ? { ...r, patientId: primaryId } : r)),
+        prescriptionDrafts: prev.prescriptionDrafts.map((d) => (d.patientId === duplicateId ? { ...d, patientId: primaryId } : d)),
+        labOrders: prev.labOrders.map((l) => (l.patientId === duplicateId ? { ...l, patientId: primaryId } : l)),
+        auditLogs: appendAudit(prev, "Patients", "Merged Profiles", `Merged ${dup.name} (${dup.uhid || dup.mrn}) into ${primary.name}`),
+      };
+    });
+    setSelectedPatientId(primaryId);
+    notify("Patient profiles merged", "All visits, vitals & Rx unified");
+  };
+
+  const updateAppointmentDetails = (id: string, patch: Partial<Appointment>) => {
+    setState((prev) => ({
+      ...prev,
+      appointments: prev.appointments.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    }));
   };
 
   const addAppointment: ClinicContextValue["addAppointment"] = (apt) => {
@@ -348,10 +664,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const addPatient: ClinicContextValue["addPatient"] = (p) => {
+    const uhidNum = 24565 + state.patients.length;
     const newPatient: Patient = {
       ...p,
       id: uid("pat"),
-      mrn: `CF-${10430 + state.patients.length}`,
+      mrn: `P-${uhidNum}`,
+      uhid: `P-${uhidNum}`,
+      abhaStatus: p.abhaStatus || "No ABHA",
       vitals: [],
       communicationLog: [],
       submittedForms: [],
@@ -974,6 +1293,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.removeItem(STORAGE_KEY);
     setState(SEED_STATE);
     setSelectedPatientId(SEED_STATE.patients[0].id);
+    setActiveRxId(SEED_STATE.prescriptionDrafts[0]?.id || null);
+    setPatientViewMode("directory");
     notify("Clinic workspace reset to default demo state", undefined, "info");
   };
 
@@ -985,6 +1306,20 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActivePage,
         selectedPatientId,
         setSelectedPatientId,
+        patientViewMode,
+        setPatientViewMode,
+        activeRxId,
+        setActiveRxId,
+        voiceRxAutoStart,
+        setVoiceRxAutoStart,
+        openPatientVisitHub,
+        openPrescriptionPad,
+        savePrescriptionDraft,
+        pushPrescriptionUpdates,
+        finishPrescription,
+        linkPatientAbha,
+        mergePatients,
+        updateAppointmentDetails,
         toasts,
         notify,
         dismissToast,

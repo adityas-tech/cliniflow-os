@@ -634,12 +634,28 @@ export function answerScopedAiQuery(params: {
             {
               heading: "Flow Optimization Tips",
               bullets: [
-                "Send automated WhatsApp reminders to any unconfirmed slots.",
-                "Move 'Checked-In' patients to 'Vitals Done' before starting Doctor EMR consultation.",
+                "Click 'Write' on any OPD queue card to jump directly into Prescription Pad v2.",
+                "Use 'Generate prescription from voice' to transcribe and auto-populate symptoms, exam & labs via ClinScribe.",
               ],
             },
           ],
-          references: ["Unified Calendar", "Front Desk Token Queue"],
+          references: ["Unified Calendar", "OPD Queue"],
+        };
+      case "analytics":
+      case "reports":
+        return {
+          title: `Clinic Analytics & ABDM Operational Insights`,
+          answerSections: [
+            {
+              heading: "Appointment & ABHA Adoption Snapshot",
+              bullets: [
+                `Total Registered Patients: ${s.patients.length} (${s.patients.filter((p) => p.abhaStatus === "ABHA Linked").length} ABHA Linked)`,
+                `Completed Visits Today: ${s.appointments.filter((a) => a.status === "completed").length} | Active OPD: ${activeQueue.length}`,
+                `Draft / Pushed Prescriptions: ${s.prescriptionDrafts.length}`,
+              ],
+            },
+          ],
+          references: ["Dr Analytics BI", "ABDM Registry"],
         };
       default:
         return answerDoctorMedicalQuery({
@@ -771,4 +787,172 @@ export function answerScopedAiQuery(params: {
     ],
     references: ["Evidence-Based Clinical Medicine", "GINA / GOLD / AASM / ADA / ACC Guidelines"],
   };
+}
+
+// ============================================================================
+// CLINIFLOW PRESCRIPTION PAD V2 — DOCTOR-PERSONALIZED FREQUENT CATALOGS
+// ============================================================================
+
+export const MEDICAL_HISTORY_CHIPS = [
+  "Hypertension",
+  "Hypothyroidism",
+  "Tobacco",
+  "Smoke",
+  "Tuberculosis",
+  "Diabetes Mellitus",
+  "Bronchial Asthma",
+  "COPD",
+];
+
+export const FREQUENT_SYMPTOMS: Array<{ name: string; icdCode: string }> = [
+  { name: "Cough", icdCode: "R05" },
+  { name: "Breathlessness", icdCode: "R06.02" },
+  { name: "Fever", icdCode: "R50.9" },
+  { name: "C.COLD", icdCode: "J00" },
+  { name: "Chest Pain", icdCode: "R07.9" },
+  { name: "Weakness", icdCode: "R53.1" },
+  { name: "Loud Snoring & Daytime Somnolence", icdCode: "R06.83" },
+  { name: "Wheezing / Nocturnal Cough", icdCode: "R06.2" },
+];
+
+export const FREQUENT_DIAGNOSES: Array<{ name: string; icdCode: string }> = [
+  { name: "NBA (Nocturnal / Bronchial Asthma)", icdCode: "J45.909" },
+  { name: "HTN (Hypertension)", icdCode: "I10" },
+  { name: "T2 DM (Type 2 Diabetes Mellitus)", icdCode: "E11.9" },
+  { name: "COPD - Chronic obstructive pulmonary disease", icdCode: "J44.9" },
+  { name: "OLD PULMONARY KOCH'S", icdCode: "B90.9" },
+  { name: "Hypothyroidism", icdCode: "E03.9" },
+  { name: "OSA - Obstructive sleep apnea", icdCode: "G47.33" },
+  { name: "Allergic Rhinosinusitis", icdCode: "J30.9" },
+];
+
+export const FREQUENT_MEDICATIONS: Array<{
+  brandName: string;
+  genericComposition: string;
+  dosage: string;
+  frequency: string;
+  timing: "After Food" | "Before Food" | "Empty Stomach" | "Bedtime";
+  durationDays: number;
+  inventoryId?: string;
+}> = [
+  {
+    brandName: "Antuc-L 75mg/20mg Capsule",
+    genericComposition: "LEVOSULPIRIDE (75MG) + RABEPRAZOLE (20MG)",
+    dosage: "1 capsule",
+    frequency: "1-0-0",
+    timing: "Empty Stomach",
+    durationDays: 15,
+  },
+  {
+    brandName: "Dfilin 400mg Tablet",
+    genericComposition: "DOXOFYLLINE (400MG)",
+    dosage: "1 tablet",
+    frequency: "1-0-1",
+    timing: "After Food",
+    durationDays: 15,
+  },
+  {
+    brandName: "JOCARE LC Tablet",
+    genericComposition: "MONTELUKAST (10MG) + LEVOCETIRIZINE (5MG)",
+    dosage: "1 tablet",
+    frequency: "0-0-1",
+    timing: "Bedtime",
+    durationDays: 15,
+  },
+  {
+    brandName: "BRO BENZ Capsule",
+    genericComposition: "BENZONATATE (100MG)",
+    dosage: "1 tablet",
+    frequency: "1-0-1",
+    timing: "After Food",
+    durationDays: 7,
+  },
+  {
+    brandName: "ALBUSOURCE Powder",
+    genericComposition: "HIGH-PROTEIN NUTRITION POWDER",
+    dosage: "2 scoops in milk/water",
+    frequency: "1-0-1",
+    timing: "After Food",
+    durationDays: 30,
+  },
+  {
+    brandName: "Foracort 200 Inhaler",
+    genericComposition: "BUDESONIDE (200MCG) + FORMOTEROL (6MCG)",
+    dosage: "2 puffs",
+    frequency: "1-0-1",
+    timing: "After Food",
+    durationDays: 30,
+  },
+  {
+    brandName: "Augmentin 625 Duo",
+    genericComposition: "AMOXICILLIN (500MG) + CLAVULANIC ACID (125MG)",
+    dosage: "1 tablet",
+    frequency: "1-0-1",
+    timing: "After Food",
+    durationDays: 5,
+    inventoryId: "inv-3",
+  },
+  {
+    brandName: "Glycomet-GP 1",
+    genericComposition: "METFORMIN (500MG) + GLIMEPIRIDE (1MG)",
+    dosage: "1 tablet",
+    frequency: "1-0-0",
+    timing: "Before Food",
+    durationDays: 30,
+    inventoryId: "inv-1",
+  },
+  {
+    brandName: "Telma 40mg",
+    genericComposition: "TELMISARTAN (40MG)",
+    dosage: "1 tablet",
+    frequency: "1-0-0",
+    timing: "After Food",
+    durationDays: 30,
+    inventoryId: "inv-2",
+  },
+];
+
+export const FREQUENT_LAB_TESTS: Array<{ name: string; category: string; cost: number }> = [
+  { name: "Spirometry", category: "Pulmonology", cost: 900 },
+  { name: "X-Ray Chest - PA View", category: "Radiology", cost: 550 },
+  { name: "ROCC (Routine Oxygen & Cardiac Check)", category: "Pulmonology", cost: 650 },
+  { name: "FENO - Fractional Exhaled Nitric Oxide Test", category: "Pulmonology", cost: 1400 },
+  { name: "RBS (Random Blood Sugar)", category: "Biochemistry", cost: 150 },
+  { name: "IgE Immunoglobulin, Serum", category: "Allergy", cost: 950 },
+  { name: "TSH (Thyroid Stimulating Hormone)", category: "Endocrinology", cost: 450 },
+  { name: "Polysomnography (Overnight Sleep Study)", category: "Sleep Lab", cost: 4500 },
+];
+
+export const ADVICE_CHIPS = [
+  "Steam inhalation twice daily & warm saline gargles",
+  "Avoid cold drinks, dust exposure & smoke",
+  "Use spacer with MDI inhaler & rinse mouth after puffs",
+  "Hospitalization advised if SpO2 < 92% or worsening dyspnea",
+  "Cardiologist review for ECG & Echo correlation",
+  "Ref to Ophthalmologist regarding drug toxicity screening",
+];
+
+export function translateInstructionToHindi(
+  dosage: string,
+  frequency: string,
+  timing: "After Food" | "Before Food" | "Empty Stomach" | "Bedtime",
+  days: number
+): string {
+  const freqMap: Record<string, string> = {
+    "1-0-1": "सुबह-शाम",
+    "1-0-0": "सुबह (दिन में 1 बार)",
+    "0-0-1": "रात में",
+    "1-1-1": "सुबह-दोपहर-शाम",
+    Weekly: "सप्ताह में 1 बार",
+    SOS: "ज़रूरत पड़ने पर",
+  };
+  const timingMap: Record<string, string> = {
+    "After Food": "खाना खाने के बाद",
+    "Before Food": "खाना खाने से पहले",
+    "Empty Stomach": "खाली पेट",
+    Bedtime: "सोने से पहले",
+  };
+  const f = freqMap[frequency] || frequency;
+  const t = timingMap[timing] || timing;
+  return `${dosage} • ${f} • ${t} • ${days} दिन`;
 }
